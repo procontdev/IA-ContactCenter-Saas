@@ -1,0 +1,844 @@
+/* =========================================================
+   0) PARAMETROS (opcional)
+   ========================================================= */
+-- Si tu schema no es demo_callcenter, cambia aquí:
+-- (Solo referencia humana; los queries usan literal demo_callcenter)
+
+
+/* =========================================================
+   1) INVENTARIO RAPIDO DE OBJETOS EN demo_callcenter
+   ========================================================= */
+-- Tablas
+select table_schema, table_name
+from information_schema.tables
+where table_schema = 'demo_callcenter'
+  and table_type = 'BASE TABLE'
+order by table_name;
+
+Resultado:
+[
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "call_analysis"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "call_human_messages"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "call_messages"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "calls"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "campaign_products"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "campaigns"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "leads"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "notifications_log"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "recordings"
+  }
+]
+
+-- Vistas
+select table_schema, table_name
+from information_schema.views
+where table_schema = 'demo_callcenter'
+order by table_name;
+
+Resultado:
+
+[
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "calls_handoff_queue"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_call_customer_chat"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_calls_audit"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_calls_outbound_dashboard"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_calls_outbound_dashboard_final"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_calls_outbound_dashboard_v2"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_campaign_stats"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_lead_duplicates"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_leads_with_campaign"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_leads_wow_queue"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_outbound_calls"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_outbound_calls_agg"
+  }
+]
+
+-- Funciones (incluye RPC)
+select n.nspname as schema,
+       p.proname as function_name,
+       pg_get_function_identity_arguments(p.oid) as args
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'demo_callcenter'
+order by p.proname, args;
+
+Resultado:
+
+[
+  {
+    "schema": "demo_callcenter",
+    "function_name": "is_valid_phone_pe",
+    "args": "p_norm text"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "normalize_call_status",
+    "args": ""
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "normalize_phone_pe",
+    "args": "p text"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "recompute_lead_wow",
+    "args": "p_lead_id uuid"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "recompute_lead_wow_all",
+    "args": "p_campaign_id uuid"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_agents",
+    "args": "p_from_pe text, p_to_pe text, p_campaign_id uuid, p_mode text"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_donut",
+    "args": "p_from_pe timestamp without time zone, p_to_pe timestamp without time zone, p_campaign_id uuid, p_mode text"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_kpis",
+    "args": "p_from_pe timestamp without time zone, p_to_pe timestamp without time zone, p_campaign_id uuid, p_mode text, p_bucket text"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_patch_wa_llm",
+    "args": "p_call_id uuid, p_patch jsonb"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_queue_stale",
+    "args": "p_from_pe timestamp without time zone, p_to_pe timestamp without time zone, p_campaign_id uuid, p_mode text, p_stale_minutes integer"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_queue_stale_table",
+    "args": "p_from_pe timestamp without time zone, p_to_pe timestamp without time zone, p_campaign_id uuid, p_mode text, p_stale_minutes integer, p_limit integer"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_table",
+    "args": "p_from_pe timestamp without time zone, p_to_pe timestamp without time zone, p_campaign_id uuid, p_mode text, p_bucket text, p_limit integer, p_offset integer"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_timeseries",
+    "args": "p_from_pe timestamp without time zone, p_to_pe timestamp without time zone, p_campaign_id uuid, p_mode text, p_grain text"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_top_campaigns",
+    "args": "p_from_pe timestamp without time zone, p_to_pe timestamp without time zone, p_campaign_id uuid, p_mode text, p_limit integer"
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "set_updated_at",
+    "args": ""
+  },
+  {
+    "schema": "demo_callcenter",
+    "function_name": "trim_call_status",
+    "args": ""
+  }
+]
+
+/* =========================================================
+   2) DDL DE TABLAS CLAVE (incluye demo_callcenter.call_messages)
+   ========================================================= */
+-- Columnas y tipos (call_messages)
+select ordinal_position, column_name, data_type, udt_name,
+       is_nullable, column_default
+from information_schema.columns
+where table_schema='demo_callcenter' and table_name='call_messages'
+order by ordinal_position;
+
+Resultado:
+
+[
+  {
+    "ordinal_position": 1,
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "ordinal_position": 2,
+    "column_name": "call_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 3,
+    "column_name": "role",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 4,
+    "column_name": "channel",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 5,
+    "column_name": "from_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 6,
+    "column_name": "from_name",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 7,
+    "column_name": "message_text",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 8,
+    "column_name": "raw",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 9,
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  },
+  {
+    "ordinal_position": 10,
+    "column_name": "external_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 11,
+    "column_name": "external_ts",
+    "data_type": "bigint",
+    "udt_name": "int8",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 12,
+    "column_name": "instance",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  }
+]
+
+-- Constraints (PK/FK/Unique/Check) de call_messages
+select conname,
+       contype,
+       pg_get_constraintdef(c.oid, true) as definition
+from pg_constraint c
+join pg_class t on t.oid = c.conrelid
+join pg_namespace n on n.oid = t.relnamespace
+where n.nspname='demo_callcenter' and t.relname='call_messages'
+order by conname;
+
+Resultado:
+
+[
+  {
+    "conname": "call_messages_call_id_fkey",
+    "contype": "f",
+    "definition": "FOREIGN KEY (call_id) REFERENCES demo_callcenter.calls(id) ON DELETE CASCADE"
+  },
+  {
+    "conname": "call_messages_pkey",
+    "contype": "p",
+    "definition": "PRIMARY KEY (id)"
+  }
+]
+
+-- Índices de call_messages
+select indexname, indexdef
+from pg_indexes
+where schemaname='demo_callcenter' and tablename='call_messages'
+order by indexname;
+
+Resultado:
+
+[
+  {
+    "indexname": "call_messages_pkey",
+    "indexdef": "CREATE UNIQUE INDEX call_messages_pkey ON demo_callcenter.call_messages USING btree (id)"
+  },
+  {
+    "indexname": "idx_call_messages_call_id_created_at",
+    "indexdef": "CREATE INDEX idx_call_messages_call_id_created_at ON demo_callcenter.call_messages USING btree (call_id, created_at DESC)"
+  },
+  {
+    "indexname": "ix_call_messages_channel_from_id_created_at",
+    "indexdef": "CREATE INDEX ix_call_messages_channel_from_id_created_at ON demo_callcenter.call_messages USING btree (channel, from_id, created_at DESC)"
+  },
+  {
+    "indexname": "uq_cc_call_messages_wa_lead_ext",
+    "indexdef": "CREATE UNIQUE INDEX uq_cc_call_messages_wa_lead_ext ON demo_callcenter.call_messages USING btree (call_id, external_id) WHERE ((channel = 'whatsapp'::text) AND (role = 'lead'::text) AND (external_id IS NOT NULL))"
+  },
+  {
+    "indexname": "ux_call_messages_channel_external_id",
+    "indexdef": "CREATE UNIQUE INDEX ux_call_messages_channel_external_id ON demo_callcenter.call_messages USING btree (channel, external_id) WHERE (external_id IS NOT NULL)"
+  }
+]
+
+-- Repite para CAMPAÑAS (si existe)
+select ordinal_position, column_name, data_type, udt_name,
+       is_nullable, column_default
+from information_schema.columns
+where table_schema='demo_callcenter' and table_name in ('campaigns','campaign')
+order by table_name, ordinal_position;
+
+
+Resultado:
+
+[
+  {
+    "ordinal_position": 1,
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "ordinal_position": 2,
+    "column_name": "code",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 3,
+    "column_name": "name",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 4,
+    "column_name": "description",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text"
+  },
+  {
+    "ordinal_position": 5,
+    "column_name": "objective",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text"
+  },
+  {
+    "ordinal_position": 6,
+    "column_name": "success_criteria",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text"
+  },
+  {
+    "ordinal_position": 7,
+    "column_name": "target_audience",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text"
+  },
+  {
+    "ordinal_position": 8,
+    "column_name": "llm_policy",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'{}'::jsonb"
+  },
+  {
+    "ordinal_position": 9,
+    "column_name": "llm_system_prompt",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text"
+  },
+  {
+    "ordinal_position": 10,
+    "column_name": "qualification_fields",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'[]'::jsonb"
+  },
+  {
+    "ordinal_position": 11,
+    "column_name": "allowed_intents",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'[]'::jsonb"
+  },
+  {
+    "ordinal_position": 12,
+    "column_name": "disallowed_topics",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'[]'::jsonb"
+  },
+  {
+    "ordinal_position": 13,
+    "column_name": "closing_reasons",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'[]'::jsonb"
+  },
+  {
+    "ordinal_position": 14,
+    "column_name": "is_active",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "is_nullable": "NO",
+    "column_default": "true"
+  },
+  {
+    "ordinal_position": 15,
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  },
+  {
+    "ordinal_position": 16,
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  },
+  {
+    "ordinal_position": 17,
+    "column_name": "opening_script",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text"
+  },
+  {
+    "ordinal_position": 18,
+    "column_name": "opening_question",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": "''::text"
+  },
+  {
+    "ordinal_position": 19,
+    "column_name": "inbound_enabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "is_nullable": "NO",
+    "column_default": "true"
+  },
+  {
+    "ordinal_position": 20,
+    "column_name": "inbound_default_mode",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": "'human'::text"
+  },
+  {
+    "ordinal_position": 21,
+    "column_name": "inbound_llm_text_enabled",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "is_nullable": "NO",
+    "column_default": "false"
+  },
+  {
+    "ordinal_position": 22,
+    "column_name": "llm_model",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 23,
+    "column_name": "llm_fallback_to_human",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "is_nullable": "NO",
+    "column_default": "true"
+  },
+  {
+    "ordinal_position": 24,
+    "column_name": "wa_instance",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 25,
+    "column_name": "wa_business_phone",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  }
+]
+
+select t.relname as table_name, c.conname, c.contype,
+       pg_get_constraintdef(c.oid, true) as definition
+from pg_constraint c
+join pg_class t on t.oid = c.conrelid
+join pg_namespace n on n.oid = t.relnamespace
+where n.nspname='demo_callcenter' and t.relname in ('campaigns','campaign')
+order by table_name, conname;
+
+Resultado:
+
+[
+  {
+    "table_name": "campaigns",
+    "conname": "campaigns_code_key",
+    "contype": "u",
+    "definition": "UNIQUE (code)"
+  },
+  {
+    "table_name": "campaigns",
+    "conname": "campaigns_pkey",
+    "contype": "p",
+    "definition": "PRIMARY KEY (id)"
+  },
+  {
+    "table_name": "campaigns",
+    "conname": "campaigns_wa_business_phone_digits",
+    "contype": "c",
+    "definition": "CHECK (wa_business_phone IS NULL OR wa_business_phone ~ '^[0-9]{8,15}$'::text)"
+  }
+]
+
+select schemaname, tablename, indexname, indexdef
+from pg_indexes
+where schemaname='demo_callcenter' and tablename in ('campaigns','campaign')
+order by tablename, indexname;
+
+Resultado:
+
+[
+  {
+    "schemaname": "demo_callcenter",
+    "tablename": "campaigns",
+    "indexname": "campaigns_code_key",
+    "indexdef": "CREATE UNIQUE INDEX campaigns_code_key ON demo_callcenter.campaigns USING btree (code)"
+  },
+  {
+    "schemaname": "demo_callcenter",
+    "tablename": "campaigns",
+    "indexname": "campaigns_pkey",
+    "indexdef": "CREATE UNIQUE INDEX campaigns_pkey ON demo_callcenter.campaigns USING btree (id)"
+  },
+  {
+    "schemaname": "demo_callcenter",
+    "tablename": "campaigns",
+    "indexname": "idx_campaigns_wa_business_phone",
+    "indexdef": "CREATE INDEX idx_campaigns_wa_business_phone ON demo_callcenter.campaigns USING btree (wa_business_phone)"
+  },
+  {
+    "schemaname": "demo_callcenter",
+    "tablename": "campaigns",
+    "indexname": "idx_campaigns_wa_instance",
+    "indexdef": "CREATE INDEX idx_campaigns_wa_instance ON demo_callcenter.campaigns USING btree (wa_instance)"
+  },
+  {
+    "schemaname": "demo_callcenter",
+    "tablename": "campaigns",
+    "indexname": "ix_campaigns_is_active",
+    "indexdef": "CREATE INDEX ix_campaigns_is_active ON demo_callcenter.campaigns USING btree (is_active)"
+  },
+  {
+    "schemaname": "demo_callcenter",
+    "tablename": "campaigns",
+    "indexname": "ix_campaigns_updated_at",
+    "indexdef": "CREATE INDEX ix_campaigns_updated_at ON demo_callcenter.campaigns USING btree (updated_at DESC)"
+  }
+]
+/* =========================================================
+   3) RPCs: DEFINICION EXACTA DE rpc_wa_ingest_message y rpc_wa_prepare_send_text
+   ========================================================= */
+select n.nspname as schema,
+       p.proname as function_name,
+       pg_get_function_identity_arguments(p.oid) as args,
+       pg_get_functiondef(p.oid) as definition
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname='demo_callcenter'
+  and p.proname in ('rpc_wa_ingest_message','rpc_wa_prepare_send_text')
+order by p.proname;
+
+Resultado:
+
+Success. No rows returned
+
+
+/* =========================================================
+   4) TRIGGERS (por si call_messages o campaigns disparan lógica)
+   ========================================================= */
+select n.nspname as schema,
+       c.relname as table_name,
+       t.tgname as trigger_name,
+       pg_get_triggerdef(t.oid, true) as definition
+from pg_trigger t
+join pg_class c on c.oid = t.tgrelid
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname='demo_callcenter'
+  and c.relname in ('call_messages','campaigns','campaign')
+  and not t.tgisinternal
+order by table_name, trigger_name;
+
+Resultado:
+
+[
+  {
+    "schema": "demo_callcenter",
+    "table_name": "campaigns",
+    "trigger_name": "trg_campaigns_set_updated_at",
+    "definition": "CREATE TRIGGER trg_campaigns_set_updated_at BEFORE UPDATE ON demo_callcenter.campaigns FOR EACH ROW EXECUTE FUNCTION demo_callcenter.set_updated_at()"
+  }
+]
+
+
+/* =========================================================
+   5) RLS / POLICIES (MUY IMPORTANTE en Supabase)
+   ========================================================= */
+-- RLS habilitado?
+select n.nspname as schema,
+       c.relname as table_name,
+       c.relrowsecurity as rls_enabled,
+       c.relforcerowsecurity as rls_forced
+from pg_class c
+join pg_namespace n on n.oid=c.relnamespace
+where n.nspname='demo_callcenter'
+  and c.relname in ('call_messages','campaigns','campaign')
+order by table_name;
+
+Resultado:
+
+[
+  {
+    "schema": "demo_callcenter",
+    "table_name": "call_messages",
+    "rls_enabled": false,
+    "rls_forced": false
+  },
+  {
+    "schema": "demo_callcenter",
+    "table_name": "campaigns",
+    "rls_enabled": false,
+    "rls_forced": false
+  }
+]
+
+
+-- Policies
+select schemaname, tablename, policyname, permissive, roles, cmd, qual, with_check
+from pg_policies
+where schemaname='demo_callcenter'
+  and tablename in ('call_messages','campaigns','campaign')
+order by tablename, policyname;
+
+Resultado:
+
+Success. No rows returned
+
+/* =========================================================
+   6) TIPOS/ENUMS (por si status, channel_type, direction, etc. son enum)
+   ========================================================= */
+select n.nspname as schema,
+       t.typname as type_name,
+       e.enumlabel as enum_value,
+       e.enumsortorder
+from pg_type t
+join pg_namespace n on n.oid=t.typnamespace
+join pg_enum e on e.enumtypid=t.oid
+where n.nspname='demo_callcenter'
+order by type_name, enumsortorder;
+
+Resultado:
+
+Success. No rows returned
+
+/* =========================================================
+   7) EXTENSIONES (por si usamos pgcrypto/uuid-ossp, etc.)
+   ========================================================= */
+select extname, extversion
+from pg_extension
+order by extname;
+
+Resultado:
+
+[
+  {
+    "extname": "pg_graphql",
+    "extversion": "1.5.11"
+  },
+  {
+    "extname": "pg_net",
+    "extversion": "0.14.0"
+  },
+  {
+    "extname": "pg_stat_statements",
+    "extversion": "1.10"
+  },
+  {
+    "extname": "pgcrypto",
+    "extversion": "1.3"
+  },
+  {
+    "extname": "pgjwt",
+    "extversion": "0.2.0"
+  },
+  {
+    "extname": "plpgsql",
+    "extversion": "1.0"
+  },
+  {
+    "extname": "supabase_vault",
+    "extversion": "0.3.1"
+  },
+  {
+    "extname": "uuid-ossp",
+    "extversion": "1.1"
+  }
+]
+
+/* =========================================================
+   8) (OPCIONAL) SI YA EXISTE ALGO DE "INBOX"
+   ========================================================= */
+-- Busca tablas/vistas relacionadas a inbox/conversation/thread
+select table_schema, table_name
+from information_schema.tables
+where table_schema='demo_callcenter'
+  and (table_name ilike '%inbox%'
+       or table_name ilike '%conversation%'
+       or table_name ilike '%thread%'
+       or table_name ilike '%channel%')
+order by table_name;
+
+Resultado:
+
+Success. No rows returned
+
+select table_schema, table_name
+from information_schema.views
+where table_schema='demo_callcenter'
+  and (table_name ilike '%inbox%'
+       or table_name ilike '%conversation%'
+       or table_name ilike '%thread%'
+       or table_name ilike '%channel%')
+order by table_name;
+
+Resultado:
+
+Success. No rows returned

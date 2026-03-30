@@ -1,0 +1,1083 @@
+A) Encontrar las 2 RPCs (porque hoy no las tenemos)
+
+Ejecuta esto para ubicarlas en cualquier schema:
+
+-- 1) Buscar las funciones por nombre exacto en cualquier schema
+select n.nspname as schema,
+       p.proname as function_name,
+       pg_get_function_identity_arguments(p.oid) as args
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where p.proname in ('rpc_wa_ingest_message','rpc_wa_prepare_send_text')
+order by n.nspname, p.proname;
+
+-- 2) Si aparecen, ahora sí trae la definición completa
+select n.nspname as schema,
+       p.proname as function_name,
+       pg_get_function_identity_arguments(p.oid) as args,
+       pg_get_functiondef(p.oid) as definition
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where p.proname in ('rpc_wa_ingest_message','rpc_wa_prepare_send_text')
+order by n.nspname, p.proname;
+
+-- 3) Búsqueda “borrosa” por si el nombre varió
+select n.nspname as schema,
+       p.proname as function_name,
+       pg_get_function_identity_arguments(p.oid) as args
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where p.proname ilike '%wa%'
+order by n.nspname, p.proname;
+
+Respuesta:
+
+[
+  {
+    "schema": "demo_callcenter",
+    "function_name": "rpc_calls_patch_wa_llm",
+    "args": "p_call_id uuid, p_patch jsonb"
+  },
+  {
+    "schema": "extensions",
+    "function_name": "pgrst_ddl_watch",
+    "args": ""
+  },
+  {
+    "schema": "extensions",
+    "function_name": "pgrst_drop_watch",
+    "args": ""
+  },
+  {
+    "schema": "net",
+    "function_name": "_await_response",
+    "args": "request_id bigint"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_current_wal_flush_lsn",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_current_wal_insert_lsn",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_current_wal_lsn",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_get_wal_replay_pause_state",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_get_wal_resource_managers",
+    "args": "OUT rm_id integer, OUT rm_name text, OUT rm_builtin boolean"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_is_wal_replay_paused",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_last_wal_receive_lsn",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_last_wal_replay_lsn",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_ls_waldir",
+    "args": "OUT name text, OUT size bigint, OUT modification timestamp with time zone"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_stat_get_backend_wait_event",
+    "args": "integer"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_stat_get_backend_wait_event_type",
+    "args": "integer"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_stat_get_wal",
+    "args": "OUT wal_records bigint, OUT wal_fpi bigint, OUT wal_bytes numeric, OUT wal_buffers_full bigint, OUT wal_write bigint, OUT wal_sync bigint, OUT wal_write_time double precision, OUT wal_sync_time double precision, OUT stats_reset timestamp with time zone"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_stat_get_wal_receiver",
+    "args": "OUT pid integer, OUT status text, OUT receive_start_lsn pg_lsn, OUT receive_start_tli integer, OUT written_lsn pg_lsn, OUT flushed_lsn pg_lsn, OUT received_tli integer, OUT last_msg_send_time timestamp with time zone, OUT last_msg_receipt_time timestamp with time zone, OUT latest_end_lsn pg_lsn, OUT latest_end_time timestamp with time zone, OUT slot_name text, OUT sender_host text, OUT sender_port integer, OUT conninfo text"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_stat_get_wal_senders",
+    "args": "OUT pid integer, OUT state text, OUT sent_lsn pg_lsn, OUT write_lsn pg_lsn, OUT flush_lsn pg_lsn, OUT replay_lsn pg_lsn, OUT write_lag interval, OUT flush_lag interval, OUT replay_lag interval, OUT sync_priority integer, OUT sync_state text, OUT reply_time timestamp with time zone"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_switch_wal",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_wal_lsn_diff",
+    "args": "pg_lsn, pg_lsn"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_wal_replay_pause",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_wal_replay_resume",
+    "args": ""
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_walfile_name",
+    "args": "pg_lsn"
+  },
+  {
+    "schema": "pg_catalog",
+    "function_name": "pg_walfile_name_offset",
+    "args": "lsn pg_lsn, OUT file_name text, OUT file_offset integer"
+  },
+  {
+    "schema": "public",
+    "function_name": "rpc_wa_decide_action",
+    "args": "p_call_id uuid"
+  },
+  {
+    "schema": "public",
+    "function_name": "rpc_wa_ingest_message",
+    "args": "p_payload jsonb, p_campaign_id uuid"
+  },
+  {
+    "schema": "public",
+    "function_name": "rpc_wa_prepare_send_text",
+    "args": "p_call_id uuid, p_agent_id text, p_text text, p_instance text, p_to text, p_raw jsonb"
+  },
+  {
+    "schema": "public",
+    "function_name": "rpc_wa_prepare_send_text",
+    "args": "p_call_id uuid, p_agent_id text, p_text text, p_instance text, p_to text"
+  },
+  {
+    "schema": "realtime",
+    "function_name": "quote_wal2json",
+    "args": "entity regclass"
+  }
+]
+
+B) DDL de calls y leads (para modelar la Inbox)
+
+call_messages.call_id referencia demo_callcenter.calls(id), así que necesito ver cómo conectan llamadas ↔ lead ↔ campaign.
+
+-- calls: columnas
+select ordinal_position, column_name, data_type, udt_name, is_nullable, column_default
+from information_schema.columns
+where table_schema='demo_callcenter' and table_name='calls'
+order by ordinal_position;
+
+Respuesta:
+
+[
+  {
+    "ordinal_position": 1,
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "ordinal_position": 2,
+    "column_name": "lead_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 3,
+    "column_name": "mode",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 4,
+    "column_name": "agent_phone",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 5,
+    "column_name": "twilio_call_sid",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 6,
+    "column_name": "status",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 7,
+    "column_name": "started_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 8,
+    "column_name": "ended_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 9,
+    "column_name": "duration_sec",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 10,
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": "now()"
+  },
+  {
+    "ordinal_position": 11,
+    "column_name": "phone",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 12,
+    "column_name": "notes",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 13,
+    "column_name": "metadata",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 14,
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": "now()"
+  },
+  {
+    "ordinal_position": 15,
+    "column_name": "handoff_reason",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 16,
+    "column_name": "assigned_channel",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 17,
+    "column_name": "assigned_to",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 18,
+    "column_name": "handoff_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 19,
+    "column_name": "human_status",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": "'pending'::text"
+  },
+  {
+    "ordinal_position": 20,
+    "column_name": "human_taken_by",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 21,
+    "column_name": "human_taken_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 22,
+    "column_name": "human_closed_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 23,
+    "column_name": "human_last_message_text",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 24,
+    "column_name": "human_last_message_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 25,
+    "column_name": "human_first_response_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 26,
+    "column_name": "human_response_count",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "is_nullable": "NO",
+    "column_default": "0"
+  },
+  {
+    "ordinal_position": 27,
+    "column_name": "opening_audio_url",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 28,
+    "column_name": "tts_provider",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 29,
+    "column_name": "is_simulated",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "is_nullable": "NO",
+    "column_default": "false"
+  },
+  {
+    "ordinal_position": 30,
+    "column_name": "human_taken_by_original",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 31,
+    "column_name": "customer_telegram_user_id",
+    "data_type": "bigint",
+    "udt_name": "int8",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 32,
+    "column_name": "customer_telegram_chat_id",
+    "data_type": "bigint",
+    "udt_name": "int8",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 33,
+    "column_name": "assigned_user_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 34,
+    "column_name": "channel",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 35,
+    "column_name": "customer_whatsapp_waid",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 36,
+    "column_name": "customer_whatsapp_phone",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 37,
+    "column_name": "external_thread_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  }
+]
+
+
+-- calls: constraints + indexes
+select conname, contype, pg_get_constraintdef(c.oid, true) as definition
+from pg_constraint c
+join pg_class t on t.oid = c.conrelid
+join pg_namespace n on n.oid = t.relnamespace
+where n.nspname='demo_callcenter' and t.relname='calls'
+order by conname;
+
+Respuesta:
+
+[
+  {
+    "conname": "calls_lead_fk",
+    "contype": "f",
+    "definition": "FOREIGN KEY (lead_id) REFERENCES demo_callcenter.leads(id) ON DELETE SET NULL"
+  },
+  {
+    "conname": "calls_mode_check",
+    "contype": "c",
+    "definition": "CHECK (mode = ANY (ARRAY['human'::text, 'llm'::text]))"
+  },
+  {
+    "conname": "calls_pkey",
+    "contype": "p",
+    "definition": "PRIMARY KEY (id)"
+  }
+]
+
+
+select indexname, indexdef
+from pg_indexes
+where schemaname='demo_callcenter' and tablename='calls'
+order by indexname;
+
+Respuesta:
+
+[
+  {
+    "indexname": "calls_is_simulated_idx",
+    "indexdef": "CREATE INDEX calls_is_simulated_idx ON demo_callcenter.calls USING btree (is_simulated)"
+  },
+  {
+    "indexname": "calls_phone_idx",
+    "indexdef": "CREATE INDEX calls_phone_idx ON demo_callcenter.calls USING btree (phone)"
+  },
+  {
+    "indexname": "calls_pkey",
+    "indexdef": "CREATE UNIQUE INDEX calls_pkey ON demo_callcenter.calls USING btree (id)"
+  },
+  {
+    "indexname": "calls_twilio_call_sid_uidx",
+    "indexdef": "CREATE UNIQUE INDEX calls_twilio_call_sid_uidx ON demo_callcenter.calls USING btree (twilio_call_sid) WHERE (twilio_call_sid IS NOT NULL)"
+  },
+  {
+    "indexname": "idx_calls_channel",
+    "indexdef": "CREATE INDEX idx_calls_channel ON demo_callcenter.calls USING btree (channel)"
+  },
+  {
+    "indexname": "idx_calls_customer_waid",
+    "indexdef": "CREATE INDEX idx_calls_customer_waid ON demo_callcenter.calls USING btree (customer_whatsapp_waid)"
+  },
+  {
+    "indexname": "idx_calls_handoff_queue",
+    "indexdef": "CREATE INDEX idx_calls_handoff_queue ON demo_callcenter.calls USING btree (mode, handoff_at DESC) WHERE ((mode = 'human'::text) AND (handoff_at IS NOT NULL))"
+  },
+  {
+    "indexname": "idx_calls_mode",
+    "indexdef": "CREATE INDEX idx_calls_mode ON demo_callcenter.calls USING btree (mode)"
+  },
+  {
+    "indexname": "idx_calls_started_at",
+    "indexdef": "CREATE INDEX idx_calls_started_at ON demo_callcenter.calls USING btree (started_at)"
+  },
+  {
+    "indexname": "idx_calls_status",
+    "indexdef": "CREATE INDEX idx_calls_status ON demo_callcenter.calls USING btree (status)"
+  },
+  {
+    "indexname": "idx_cc_calls_twilio_sid",
+    "indexdef": "CREATE INDEX idx_cc_calls_twilio_sid ON demo_callcenter.calls USING btree (twilio_call_sid)"
+  },
+  {
+    "indexname": "ix_calls_assigned_to",
+    "indexdef": "CREATE INDEX ix_calls_assigned_to ON demo_callcenter.calls USING btree (assigned_to)"
+  },
+  {
+    "indexname": "ix_calls_assigned_user_id",
+    "indexdef": "CREATE INDEX ix_calls_assigned_user_id ON demo_callcenter.calls USING btree (assigned_user_id)"
+  },
+  {
+    "indexname": "ix_calls_created_at",
+    "indexdef": "CREATE INDEX ix_calls_created_at ON demo_callcenter.calls USING btree (created_at DESC)"
+  },
+  {
+    "indexname": "ix_calls_lead_id",
+    "indexdef": "CREATE INDEX ix_calls_lead_id ON demo_callcenter.calls USING btree (lead_id)"
+  }
+]
+
+-- leads: columnas
+select ordinal_position, column_name, data_type, udt_name, is_nullable, column_default
+from information_schema.columns
+where table_schema='demo_callcenter' and table_name='leads'
+order by ordinal_position;
+
+Respuesta: 
+
+[
+  {
+    "ordinal_position": 1,
+    "column_name": "id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "ordinal_position": 2,
+    "column_name": "source_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 3,
+    "column_name": "form_id",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 4,
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": "now()"
+  },
+  {
+    "ordinal_position": 5,
+    "column_name": "fecha",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 6,
+    "column_name": "campaign",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 7,
+    "column_name": "queue_start",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 8,
+    "column_name": "queue_end",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 9,
+    "column_name": "estado_cliente",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 10,
+    "column_name": "estado_usuario",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 11,
+    "column_name": "phone",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 12,
+    "column_name": "usuario",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 13,
+    "column_name": "extension",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 14,
+    "column_name": "duracion_sec",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 15,
+    "column_name": "call_state_general",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 16,
+    "column_name": "call_state",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 17,
+    "column_name": "sale_state_general",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 18,
+    "column_name": "sale_state",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 19,
+    "column_name": "depto",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 20,
+    "column_name": "provincia",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 21,
+    "column_name": "distrito",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 22,
+    "column_name": "raw",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 23,
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": "now()"
+  },
+  {
+    "ordinal_position": 24,
+    "column_name": "campaign_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 25,
+    "column_name": "is_active",
+    "data_type": "boolean",
+    "udt_name": "bool",
+    "is_nullable": "NO",
+    "column_default": "true"
+  },
+  {
+    "ordinal_position": 26,
+    "column_name": "import_batch_id",
+    "data_type": "uuid",
+    "udt_name": "uuid",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 27,
+    "column_name": "archived_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 28,
+    "column_name": "phone_norm",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 29,
+    "column_name": "lead_score",
+    "data_type": "integer",
+    "udt_name": "int4",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 30,
+    "column_name": "lead_temperature",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 31,
+    "column_name": "lead_score_reasons",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'[]'::jsonb"
+  },
+  {
+    "ordinal_position": 32,
+    "column_name": "quality_flags",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'[]'::jsonb"
+  },
+  {
+    "ordinal_position": 33,
+    "column_name": "spam_flags",
+    "data_type": "jsonb",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'[]'::jsonb"
+  },
+  {
+    "ordinal_position": 34,
+    "column_name": "next_best_action",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 35,
+    "column_name": "priority",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 36,
+    "column_name": "sla_due_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 37,
+    "column_name": "last_scored_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 38,
+    "column_name": "telegram_user_id",
+    "data_type": "bigint",
+    "udt_name": "int8",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 39,
+    "column_name": "telegram_chat_id",
+    "data_type": "bigint",
+    "udt_name": "int8",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 40,
+    "column_name": "channel",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 41,
+    "column_name": "whatsapp_waid",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 42,
+    "column_name": "whatsapp_phone",
+    "data_type": "text",
+    "udt_name": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "ordinal_position": 43,
+    "column_name": "last_inbound_at",
+    "data_type": "timestamp with time zone",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+  }
+]
+
+-- leads: constraints + indexes
+select conname, contype, pg_get_constraintdef(c.oid, true) as definition
+from pg_constraint c
+join pg_class t on t.oid = c.conrelid
+join pg_namespace n on n.oid = t.relnamespace
+where n.nspname='demo_callcenter' and t.relname='leads'
+order by conname;
+
+Respuesta:
+
+[
+  {
+    "conname": "leads_campaign_id_fkey",
+    "contype": "f",
+    "definition": "FOREIGN KEY (campaign_id) REFERENCES demo_callcenter.campaigns(id)"
+  },
+  {
+    "conname": "leads_campaign_source_id_uk",
+    "contype": "u",
+    "definition": "UNIQUE (campaign_id, source_id)"
+  },
+  {
+    "conname": "leads_pkey",
+    "contype": "p",
+    "definition": "PRIMARY KEY (id)"
+  }
+]
+
+select indexname, indexdef
+from pg_indexes
+where schemaname='demo_callcenter' and tablename='leads'
+order by indexname;
+
+Respuesta:
+
+[
+  {
+    "indexname": "idx_cc_leads_campaign",
+    "indexdef": "CREATE INDEX idx_cc_leads_campaign ON demo_callcenter.leads USING btree (campaign)"
+  },
+  {
+    "indexname": "idx_cc_leads_fecha",
+    "indexdef": "CREATE INDEX idx_cc_leads_fecha ON demo_callcenter.leads USING btree (fecha)"
+  },
+  {
+    "indexname": "idx_cc_leads_phone",
+    "indexdef": "CREATE INDEX idx_cc_leads_phone ON demo_callcenter.leads USING btree (phone)"
+  },
+  {
+    "indexname": "idx_leads_whatsapp_phone",
+    "indexdef": "CREATE INDEX idx_leads_whatsapp_phone ON demo_callcenter.leads USING btree (whatsapp_phone)"
+  },
+  {
+    "indexname": "idx_leads_whatsapp_waid",
+    "indexdef": "CREATE INDEX idx_leads_whatsapp_waid ON demo_callcenter.leads USING btree (whatsapp_waid)"
+  },
+  {
+    "indexname": "ix_leads_campaign_active",
+    "indexdef": "CREATE INDEX ix_leads_campaign_active ON demo_callcenter.leads USING btree (campaign_id, is_active)"
+  },
+  {
+    "indexname": "ix_leads_campaign_id",
+    "indexdef": "CREATE INDEX ix_leads_campaign_id ON demo_callcenter.leads USING btree (campaign_id)"
+  },
+  {
+    "indexname": "ix_leads_campaign_importbatch",
+    "indexdef": "CREATE INDEX ix_leads_campaign_importbatch ON demo_callcenter.leads USING btree (campaign_id, import_batch_id)"
+  },
+  {
+    "indexname": "ix_leads_phone_norm",
+    "indexdef": "CREATE INDEX ix_leads_phone_norm ON demo_callcenter.leads USING btree (phone_norm)"
+  },
+  {
+    "indexname": "ix_leads_score_desc",
+    "indexdef": "CREATE INDEX ix_leads_score_desc ON demo_callcenter.leads USING btree (lead_score DESC NULLS LAST)"
+  },
+  {
+    "indexname": "ix_leads_sla_due",
+    "indexdef": "CREATE INDEX ix_leads_sla_due ON demo_callcenter.leads USING btree (sla_due_at)"
+  },
+  {
+    "indexname": "leads_campaign_source_id_uk",
+    "indexdef": "CREATE UNIQUE INDEX leads_campaign_source_id_uk ON demo_callcenter.leads USING btree (campaign_id, source_id)"
+  },
+  {
+    "indexname": "leads_pkey",
+    "indexdef": "CREATE UNIQUE INDEX leads_pkey ON demo_callcenter.leads USING btree (id)"
+  },
+  {
+    "indexname": "uq_leads_campaign_source",
+    "indexdef": "CREATE UNIQUE INDEX uq_leads_campaign_source ON demo_callcenter.leads USING btree (campaign_id, source_id) WHERE ((source_id IS NOT NULL) AND (source_id <> ''::text))"
+  },
+  {
+    "indexname": "uq_leads_campaign_source_clean",
+    "indexdef": "CREATE UNIQUE INDEX uq_leads_campaign_source_clean ON demo_callcenter.leads USING btree (campaign_id, source_id) WHERE ((source_id IS NOT NULL) AND (btrim(source_id) <> ''::text))"
+  },
+  {
+    "indexname": "ux_leads_campaign_source",
+    "indexdef": "CREATE UNIQUE INDEX ux_leads_campaign_source ON demo_callcenter.leads USING btree (campaign_id, source_id) WHERE (source_id IS NOT NULL)"
+  }
+]
+
+C) Definición de vistas que podrían servir para Inbox (ya existe “customer chat”)
+
+Tienes v_call_customer_chat. Si esa vista ya junta mensajes por “cliente”, puede ser base del Inbox.
+
+select table_schema, table_name, view_definition
+from information_schema.views
+where table_schema='demo_callcenter'
+  and table_name in ('v_call_customer_chat','calls_handoff_queue','v_leads_with_campaign');
+
+[
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "calls_handoff_queue",
+    "view_definition": " SELECT calls.id AS call_id,\n    calls.lead_id,\n    calls.phone,\n    calls.handoff_reason,\n    calls.handoff_at,\n    calls.assigned_channel,\n    calls.assigned_to,\n    calls.human_status,\n    calls.human_taken_by,\n    calls.human_taken_at,\n    ((calls.metadata -> 'llm'::text) ->> 'service_interest'::text) AS service_interest,\n    ((calls.metadata -> 'llm'::text) ->> 'stage'::text) AS stage,\n    ((calls.metadata -> 'llm'::text) ->> 'last_say'::text) AS last_say\n   FROM demo_callcenter.calls\n  WHERE ((calls.mode = 'human'::text) AND (calls.handoff_at IS NOT NULL))\n  ORDER BY calls.handoff_at DESC;"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_call_customer_chat",
+    "view_definition": " SELECT c.id AS call_id,\n    c.customer_telegram_chat_id,\n    c.customer_telegram_user_id,\n    c.lead_id,\n    c.phone,\n    c.created_at\n   FROM demo_callcenter.calls c;"
+  },
+  {
+    "table_schema": "demo_callcenter",
+    "table_name": "v_leads_with_campaign",
+    "view_definition": " SELECT l.id,\n    l.source_id,\n    l.form_id,\n    l.created_at,\n    l.fecha,\n    l.campaign,\n    l.queue_start,\n    l.queue_end,\n    l.estado_cliente,\n    l.estado_usuario,\n    l.phone,\n    l.usuario,\n    l.extension,\n    l.duracion_sec,\n    l.call_state_general,\n    l.call_state,\n    l.sale_state_general,\n    l.sale_state,\n    l.depto,\n    l.provincia,\n    l.distrito,\n    l.raw,\n    l.updated_at,\n    l.campaign_id,\n    COALESCE(c_by_id.id, c_by_code.id) AS campaign_id_resolved,\n    COALESCE(c_by_id.code, c_by_code.code) AS campaign_code,\n    COALESCE(c_by_id.name, c_by_code.name) AS campaign_name,\n    COALESCE(c_by_id.description, c_by_code.description) AS campaign_description,\n    COALESCE(c_by_id.objective, c_by_code.objective) AS campaign_objective,\n    COALESCE(c_by_id.llm_policy, c_by_code.llm_policy) AS campaign_llm_policy,\n    COALESCE(c_by_id.llm_system_prompt, c_by_code.llm_system_prompt) AS campaign_llm_system_prompt,\n    COALESCE(c_by_id.success_criteria, c_by_code.success_criteria) AS campaign_success_criteria,\n    COALESCE(c_by_id.target_audience, c_by_code.target_audience) AS campaign_target_audience,\n    COALESCE(c_by_id.qualification_fields, c_by_code.qualification_fields) AS campaign_qualification_fields,\n    COALESCE(c_by_id.allowed_intents, c_by_code.allowed_intents) AS campaign_allowed_intents,\n    COALESCE(c_by_id.disallowed_topics, c_by_code.disallowed_topics) AS campaign_disallowed_topics,\n    COALESCE(c_by_id.closing_reasons, c_by_code.closing_reasons) AS campaign_closing_reasons,\n    COALESCE(c_by_id.is_active, c_by_code.is_active) AS campaign_is_active\n   FROM ((demo_callcenter.leads l\n     LEFT JOIN demo_callcenter.campaigns c_by_id ON ((c_by_id.id = l.campaign_id)))\n     LEFT JOIN demo_callcenter.campaigns c_by_code ON (((c_by_code.code = l.campaign) AND (l.campaign_id IS NULL))));"
+  }
+]
+
+
+
+
+
+
+
