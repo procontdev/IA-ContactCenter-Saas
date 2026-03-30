@@ -1,0 +1,18 @@
+{
+    "name": "ia-contactcenter-saas",
+    "private": true,
+    "version": "0.1.0",
+    "workspaces": [
+        "apps/*",
+        "packages/*"
+    ],
+    "scripts": {
+        "dev": "pnpm --dir apps/web dev",
+        "build": "pnpm --dir apps/web build",
+        "start": "pnpm --dir apps/web start",
+        "lint": "pnpm --dir apps/web lint",
+        "typecheck": "pnpm --dir apps/web exec tsc --noEmit",
+        "test": "echo \"Tests pending\"",
+        "db:migrations": "echo \"Use supabase/migrations\""
+    }
+}

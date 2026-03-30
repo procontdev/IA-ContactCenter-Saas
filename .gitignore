@@ -1,0 +1,38 @@
+# dependencies
+node_modules/
+
+# build
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# env
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# misc
+coverage/
+*.tsbuildinfo
+
+# local Supabase
+.supabase/
+
+# keep migrations, ignore generated tmp if any
+tmp/
