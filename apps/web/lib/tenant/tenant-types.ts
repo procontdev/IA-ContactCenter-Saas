@@ -32,3 +32,13 @@ export interface TenantMembership {
   is_primary: boolean;
   is_active: boolean;
 }
+
+export interface TenantMember {
+  tenant_id: string;
+  user_id: string;
+  email: string | null;
+  role: UserRole;
+  is_primary: boolean;
+  joined_at: string | null;
+  invited_at: string | null;
+}
