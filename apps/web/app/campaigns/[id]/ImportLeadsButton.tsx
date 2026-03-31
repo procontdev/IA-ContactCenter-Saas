@@ -2,6 +2,7 @@
 
 import React, { useRef, useState } from "react";
 import { SB_URL, SB_ANON, SB_SCHEMA } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 // Si ya tienes XLSX instalado úsalo. Si no, comenta el import y deja solo CSV.
 import * as XLSX from "xlsx";
@@ -185,28 +186,45 @@ async function sbRest<T>(
         query?: Record<string, string | number | boolean | undefined | null>;
         body?: any;
         extraHeaders?: Record<string, string>;
+        tenantId?: string;
     } = {}
 ): Promise<T> {
+    const method = opts.method || "GET";
+    const finalQuery = { ...(opts.query || {}) };
+
+    if (opts.tenantId && (method === "GET" || !method) && !finalQuery.tenant_id) {
+        finalQuery.tenant_id = `eq.${opts.tenantId}`;
+    }
+
+    let finalBody = opts.body;
+    if (opts.tenantId && (method === "POST" || method === "PATCH")) {
+        if (Array.isArray(finalBody)) {
+            finalBody = finalBody.map((item) => ({ ...item, tenant_id: opts.tenantId }));
+        } else if (typeof finalBody === "object" && finalBody !== null) {
+            finalBody = { ...finalBody, tenant_id: opts.tenantId };
+        }
+    }
+
     const url = new URL(`${SB_URL}${path}`);
-    if (opts.query) {
-        for (const [k, v] of Object.entries(opts.query)) {
+    if (finalQuery) {
+        for (const [k, v] of Object.entries(finalQuery)) {
             if (v === undefined || v === null) continue;
             url.searchParams.set(k, String(v));
         }
     }
 
     const res = await fetch(url.toString(), {
-        method: opts.method || "GET",
+        method,
         headers: {
             apikey: SB_ANON,
             Authorization: `Bearer ${SB_ANON}`,
             Accept: "application/json",
             "Accept-Profile": SB_SCHEMA,
             "Content-Profile": SB_SCHEMA,
-            ...(opts.body ? { "Content-Type": "application/json" } : {}),
+            ...(finalBody ? { "Content-Type": "application/json" } : {}),
             ...(opts.extraHeaders ?? {}),
         },
-        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        body: finalBody ? JSON.stringify(finalBody) : undefined,
         cache: "no-store",
     });
 
@@ -221,6 +239,8 @@ async function sbRest<T>(
 }
 
 export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [mode, setMode] = useState<ImportMode>("merge");
     const [busy, setBusy] = useState(false);
@@ -248,6 +268,7 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
         // 1) leer leads actuales de la campaña
         const existing = await sbRest<{ id: string; source_id: string }[]>("/rest/v1/leads", {
             method: "GET",
+            tenantId,
             query: {
                 select: "id,source_id",
                 campaign_id: `eq.${campaignId}`,
@@ -265,6 +286,7 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
         const ids = toRemove.map((r) => r.id);
         const calls = await sbRest<{ lead_id: string }[]>("/rest/v1/calls", {
             method: "GET",
+            tenantId,
             query: {
                 select: "lead_id",
                 lead_id: `in.(${ids.join(",")})`,
@@ -290,6 +312,7 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
                 const part = detachIds.slice(i, i + chunk);
                 await sbRest("/rest/v1/leads", {
                     method: "PATCH",
+                    tenantId,
                     query: { id: `in.(${part.join(",")})` },
                     body: { campaign_id: null, updated_at: nowIso() },
                 });
@@ -303,6 +326,7 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
                 const part = deleteIds.slice(i, i + chunk);
                 await sbRest("/rest/v1/leads", {
                     method: "DELETE",
+                    tenantId,
                     query: { id: `in.(${part.join(",")})` },
                 });
             }
@@ -316,6 +340,7 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
 
             await sbRest("/rest/v1/leads", {
                 method: "POST",
+                tenantId,
                 query: {
                     on_conflict: "campaign_id,source_id", // 🔑 recomendado
                 },
@@ -328,6 +353,11 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
     }
 
     async function onPickFile(file: File) {
+        if (tenantLoading || !tenantId) {
+            setMsg("❌ Contexto tenant no disponible. Reintenta en unos segundos.");
+            return;
+        }
+
         setBusy(true);
         setMsg(null);
 
@@ -376,7 +406,7 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
                         className="border rounded-md px-2 py-1 text-sm"
                         value={mode}
                         onChange={(e) => setMode(e.target.value as ImportMode)}
-                        disabled={busy}
+                        disabled={busy || tenantLoading || !tenantId}
                     >
                         <option value="merge">Agregar / Actualizar</option>
                         <option value="replace">Reemplazar (sin romper calls)</option>
@@ -384,7 +414,7 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
 
                     <button
                         className="border rounded-md px-3 py-1 text-sm hover:bg-muted disabled:opacity-50"
-                        disabled={busy}
+                        disabled={busy || tenantLoading || !tenantId}
                         onClick={() => inputRef.current?.click()}
                     >
                         {busy ? "Importando..." : "Importar archivo"}

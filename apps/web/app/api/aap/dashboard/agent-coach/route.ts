@@ -201,7 +201,7 @@ export async function POST(req: Request) {
             return jsonErr("Missing p_from_pe / p_to_pe / p_tenant_id", 400);
         }
 
-        const agentCommon = {
+        const agentKpisPayload = {
             p_tenant_id, // ✅ Pasado a la RPC
             p_from_pe,
             p_to_pe,
@@ -210,10 +210,18 @@ export async function POST(req: Request) {
             p_agent,
         };
 
+        const slaPayload = {
+            p_tenant_id,
+            p_from_pe,
+            p_to_pe,
+            p_campaign_id,
+            p_agent,
+        };
+
         // ✅ RPCs en public (forzado)
         const [agentKpisRows, slaRows] = await Promise.all([
-            postgrestRpc<AgentKpisRow[]>("rpc_calls_agent_kpis", agentCommon, POSTGREST_PROFILE),
-            postgrestRpc<SlaBucketRow[]>("rpc_calls_sla_buckets", agentCommon, POSTGREST_PROFILE),
+            postgrestRpc<AgentKpisRow[]>("rpc_calls_agent_kpis", agentKpisPayload, POSTGREST_PROFILE),
+            postgrestRpc<SlaBucketRow[]>("rpc_calls_sla_buckets", slaPayload, POSTGREST_PROFILE),
         ]);
 
         const chosen =

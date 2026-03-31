@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 
 // Ajusta este import según tu proyecto:
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 type Campaign = {
     id: string;
@@ -82,8 +83,9 @@ type CampaignStatsRow = {
     updated_at?: string | null;
 };
 
-async function fetchCampaign(id: string): Promise<Campaign | null> {
+async function fetchCampaign(id: string, tenantId?: string): Promise<Campaign | null> {
     const res = await sbFetch<Campaign[]>("/rest/v1/campaigns", {
+        tenantId,
         query: {
             select:
                 "id,code,name,description,objective,success_criteria,target_audience,llm_policy,llm_system_prompt," +
@@ -95,8 +97,9 @@ async function fetchCampaign(id: string): Promise<Campaign | null> {
     return res?.[0] ?? null;
 }
 
-async function fetchCampaignStatsById(id: string): Promise<CampaignStatsRow | null> {
+async function fetchCampaignStatsById(id: string, tenantId?: string): Promise<CampaignStatsRow | null> {
     const res = await sbFetch<CampaignStatsRow[]>("/rest/v1/v_campaign_stats", {
+        tenantId,
         query: {
             select: "*",
             campaign_id: `eq.${id}`,
@@ -106,8 +109,9 @@ async function fetchCampaignStatsById(id: string): Promise<CampaignStatsRow | nu
     return res?.[0] ?? null;
 }
 
-async function fetchCampaignProducts(id: string): Promise<CampaignProduct[]> {
+async function fetchCampaignProducts(id: string, tenantId?: string): Promise<CampaignProduct[]> {
     return sbFetch<CampaignProduct[]>("/rest/v1/campaign_products", {
+        tenantId,
         query: {
             select:
                 "id,campaign_id,code,name,price_monthly,currency,is_active,price_text,description,source_url,updated_at",
@@ -161,6 +165,8 @@ function JsonBlock({ value }: { value: any }) {
 
 export default function CampaignDetailPage() {
     const params = useParams();
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
     const id = String((params as any)?.id ?? "");
 
     const [campaign, setCampaign] = useState<Campaign | null>(null);
@@ -173,6 +179,7 @@ export default function CampaignDetailPage() {
         let alive = true;
 
         async function run() {
+            if (tenantLoading || !tenantId) return;
             if (!id) {
                 setLoading(false);
                 setError("Falta parámetro id");
@@ -184,9 +191,9 @@ export default function CampaignDetailPage() {
 
             try {
                 const [c, s, p] = await Promise.all([
-                    fetchCampaign(id),
-                    fetchCampaignStatsById(id),
-                    fetchCampaignProducts(id),
+                    fetchCampaign(id, tenantId),
+                    fetchCampaignStatsById(id, tenantId),
+                    fetchCampaignProducts(id, tenantId),
                 ]);
 
                 if (!alive) return;
@@ -206,7 +213,7 @@ export default function CampaignDetailPage() {
         return () => {
             alive = false;
         };
-    }, [id]);
+    }, [id, tenantLoading, tenantId]);
 
     if (loading) {
         return (

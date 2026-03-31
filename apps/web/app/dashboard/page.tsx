@@ -969,6 +969,13 @@ export default function AapDashboardPage() {
                 p_mode: "human",
             };
 
+            const slaBase = {
+                p_tenant_id: tenantId,
+                p_from_pe: range.p_from_pe,
+                p_to_pe: range.p_to_pe,
+                p_campaign_id: campaignId ? campaignId : null,
+            };
+
             try {
                 const settled = await Promise.allSettled([
                     // Esta RPC puede devolver columnas `agent/calls` o `agente/cnt` según tu SQL actual
@@ -978,7 +985,7 @@ export default function AapDashboardPage() {
 
                     sbRpc<SlaBucketRow[]>(
                         "rpc_calls_sla_buckets",
-                        { ...base, p_agent: agent ? agent : null }
+                        { ...slaBase, p_agent: agent ? agent : null }
                     ),
                 ]);
 
@@ -1049,19 +1056,6 @@ export default function AapDashboardPage() {
         tenantLoading
     ]);
 
-    if (tenantLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-slate-50 p-8 text-slate-500">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600"></div>
-                    <p className="text-lg font-medium animate-pulse">Cargando contexto de cliente...</p>
-                </div>
-            </div>
-        );
-    }
-
-
-
     // -------------------- Derived --------------------
     const donutTotal = useMemo(() => donut.reduce((a, b) => a + Number(b.calls ?? 0), 0), [donut]);
 
@@ -1123,6 +1117,17 @@ export default function AapDashboardPage() {
     }, [coach, agent]);
 
     // -------------------- UI --------------------
+    if (tenantLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-50 p-8 text-slate-500">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600"></div>
+                    <p className="text-lg font-medium animate-pulse">Cargando contexto de cliente...</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-6 space-y-5">
             <div className="flex items-start justify-between gap-4 flex-wrap">

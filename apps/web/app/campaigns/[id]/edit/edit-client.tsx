@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 import DuplicateCampaignButton from "@/app/campaigns/_components/DuplicateCampaignButton";
 
 type Campaign = {
@@ -90,8 +91,9 @@ function numOrNull(v: string): number | null {
     return Number.isFinite(n) ? n : null;
 }
 
-async function fetchCampaign(id: string): Promise<Campaign | null> {
+async function fetchCampaign(id: string, tenantId?: string): Promise<Campaign | null> {
     const rows = await sbFetch<Campaign[]>("/rest/v1/campaigns", {
+        tenantId,
         query: {
             select:
                 "id,code,name,description,objective,success_criteria,target_audience,llm_policy,llm_system_prompt," +
@@ -104,8 +106,9 @@ async function fetchCampaign(id: string): Promise<Campaign | null> {
     return rows?.[0] ?? null;
 }
 
-async function fetchCampaignProducts(id: string): Promise<CampaignProduct[]> {
+async function fetchCampaignProducts(id: string, tenantId?: string): Promise<CampaignProduct[]> {
     return sbFetch<CampaignProduct[]>("/rest/v1/campaign_products", {
+        tenantId,
         query: {
             select: "id,campaign_id,code,name,price_monthly,currency,is_active,price_text,description,source_url,updated_at",
             campaign_id: `eq.${id}`,
@@ -115,10 +118,14 @@ async function fetchCampaignProducts(id: string): Promise<CampaignProduct[]> {
     });
 }
 
-async function createProduct(payload: Partial<CampaignProduct> & { campaign_id: string; code: string; name: string; price_monthly: number }) {
+async function createProduct(
+    payload: Partial<CampaignProduct> & { campaign_id: string; code: string; name: string; price_monthly: number },
+    tenantId?: string
+) {
     // OJO: si omitimos data/disclaimers/source_url, la tabla tiene defaults
     return sbFetch("/rest/v1/campaign_products", {
         method: "POST",
+        tenantId,
         body: {
             campaign_id: payload.campaign_id,
             code: payload.code,
@@ -136,9 +143,10 @@ async function createProduct(payload: Partial<CampaignProduct> & { campaign_id: 
     });
 }
 
-async function updateProduct(id: string, patch: Partial<CampaignProduct>) {
+async function updateProduct(id: string, patch: Partial<CampaignProduct>, tenantId?: string) {
     return sbFetch("/rest/v1/campaign_products", {
         method: "PATCH",
+        tenantId,
         query: { id: `eq.${id}` },
         body: {
             ...patch,
@@ -147,15 +155,18 @@ async function updateProduct(id: string, patch: Partial<CampaignProduct>) {
     });
 }
 
-async function deleteProduct(id: string) {
+async function deleteProduct(id: string, tenantId?: string) {
     return sbFetch("/rest/v1/campaign_products", {
         method: "DELETE",
+        tenantId,
         query: { id: `eq.${id}` },
     });
 }
 
 export default function EditCampaignClient({ id }: { id: string }) {
     const router = useRouter();
+    const { context } = useTenant();
+    const tenantId = context?.tenantId || undefined;
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -242,7 +253,13 @@ export default function EditCampaignClient({ id }: { id: string }) {
         setLoading(true);
         setError(null);
         try {
-            const [c, ps] = await Promise.all([fetchCampaign(id), fetchCampaignProducts(id)]);
+            if (!tenantId) {
+                setError("No se pudo determinar tenant para cargar campaña.");
+                setLoading(false);
+                return;
+            }
+
+            const [c, ps] = await Promise.all([fetchCampaign(id, tenantId), fetchCampaignProducts(id, tenantId)]);
 
             if (!c) {
                 setCampaign(null);
@@ -289,7 +306,7 @@ export default function EditCampaignClient({ id }: { id: string }) {
 
     async function reloadProductsOnly() {
         try {
-            const ps = await fetchCampaignProducts(id);
+            const ps = await fetchCampaignProducts(id, tenantId);
             setProducts(ps ?? []);
         } catch (e: any) {
             setError(e?.message ?? String(e));
@@ -299,7 +316,7 @@ export default function EditCampaignClient({ id }: { id: string }) {
     useEffect(() => {
         reloadAll();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id]);
+    }, [id, tenantId]);
 
     async function onSaveCampaign() {
         setError(null);
@@ -334,6 +351,7 @@ export default function EditCampaignClient({ id }: { id: string }) {
         try {
             await sbFetch("/rest/v1/campaigns", {
                 method: "PATCH",
+                tenantId,
                 query: { id: `eq.${id}` },
                 body: {
                     code: code.trim(),
@@ -415,7 +433,7 @@ export default function EditCampaignClient({ id }: { id: string }) {
                 price_text: pPriceText ?? "",
                 description: pDesc ?? "",
                 source_url: pSourceUrl ?? "",
-            });
+            }, tenantId);
 
             // limpia inputs
             setPCode("");
@@ -478,7 +496,7 @@ export default function EditCampaignClient({ id }: { id: string }) {
                 price_text: ePriceText ?? "",
                 description: eDesc ?? "",
                 source_url: eSourceUrl ?? "",
-            });
+            }, tenantId);
 
             setEditId(null);
             await reloadProductsOnly();
@@ -493,7 +511,7 @@ export default function EditCampaignClient({ id }: { id: string }) {
         setError(null);
         setSaving(true);
         try {
-            await updateProduct(p.id, { is_active: !p.is_active });
+            await updateProduct(p.id, { is_active: !p.is_active }, tenantId);
             await reloadProductsOnly();
         } catch (e: any) {
             setError(e?.message ?? String(e));
@@ -509,7 +527,7 @@ export default function EditCampaignClient({ id }: { id: string }) {
         setError(null);
         setSaving(true);
         try {
-            await deleteProduct(p.id);
+            await deleteProduct(p.id, tenantId);
             if (editId === p.id) setEditId(null);
             await reloadProductsOnly();
         } catch (e: any) {

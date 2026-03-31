@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 type CampaignRow = {
     id: string;
@@ -226,17 +228,6 @@ function postJson(url: string, payload: any, apiKey?: string) {
     });
 }
 
-function supabaseRestGet(url: string, anonKey: string) {
-    return fetch(url, {
-        method: "GET",
-        headers: {
-            apikey: anonKey,
-            Authorization: `Bearer ${anonKey}`,
-            "Accept-Profile": "demo_callcenter",
-        },
-    });
-}
-
 // ---------- Sorting helpers (sin hooks) ----------
 function toggleSort(key: SortKey, currentKey: SortKey, dir: SortDir): SortDir {
     if (key === currentKey) return dir === "asc" ? "desc" : "asc";
@@ -264,9 +255,8 @@ export default function ReportsPage() {
     const N8N_API_KEY =
         (process.env.NEXT_PUBLIC_N8N_REPORT_API_KEY as string) || "";
 
-    const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL as string) || "";
-    const SUPABASE_ANON =
-        (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string) || "";
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
 
     // ---- State ----
     const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
@@ -316,6 +306,7 @@ export default function ReportsPage() {
     }, [sortKey, sortDir]);
 
     useEffect(() => {
+        if (tenantLoading || !tenantId) return;
         let cancelled = false;
 
         async function run() {
@@ -323,21 +314,13 @@ export default function ReportsPage() {
             setError("");
 
             try {
-                if (!SUPABASE_URL || !SUPABASE_ANON) {
-                    throw new Error(
-                        "Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY en el .env"
-                    );
-                }
-
-                const url = `${SUPABASE_URL}/rest/v1/campaigns?select=id,code,name&order=name.asc`;
-                const res = await supabaseRestGet(url, SUPABASE_ANON);
-
-                if (!res.ok) {
-                    const txt = await res.text();
-                    throw new Error(`Supabase REST ${res.status}: ${txt}`);
-                }
-
-                const data = (await res.json()) as CampaignRow[];
+                const data = await sbFetch<CampaignRow[]>("/rest/v1/campaigns", {
+                    tenantId,
+                    query: {
+                        select: "id,code,name",
+                        order: "name.asc",
+                    },
+                });
                 if (cancelled) return;
 
                 setCampaigns(data || []);
@@ -357,7 +340,7 @@ export default function ReportsPage() {
         return () => {
             cancelled = true;
         };
-    }, [SUPABASE_URL, SUPABASE_ANON]);
+    }, [tenantLoading, tenantId]);
 
     // ---- Maps ----
     const campById = useMemo(() => {

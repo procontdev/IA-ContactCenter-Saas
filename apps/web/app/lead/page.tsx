@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 type LeadWithCampaign = {
     id: string;
@@ -28,23 +29,27 @@ type Call = {
 };
 
 export default function LeadPage() {
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
     const [lead, setLead] = useState<LeadWithCampaign | null>(null);
     const [calls, setCalls] = useState<Call[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const id = new URLSearchParams(window.location.search).get("id");
-        if (!id) return;
+        if (!id || tenantLoading || !tenantId) return;
 
         (async () => {
             setLoading(true);
 
             // ✅ ahora consume la VIEW
             const leadRes = await sbFetch<LeadWithCampaign[]>("/rest/v1/v_leads_with_campaign", {
+                tenantId,
                 query: { select: "*", id: `eq.${id}`, limit: 1 },
             });
 
             const callsRes = await sbFetch<Call[]>("/rest/v1/calls", {
+                tenantId,
                 query: {
                     select: "id,lead_id,mode,status,started_at,created_at,duration_sec",
                     lead_id: `eq.${id}`,
@@ -57,7 +62,7 @@ export default function LeadPage() {
             setCalls(callsRes ?? []);
             setLoading(false);
         })().catch(() => setLoading(false));
-    }, []);
+    }, [tenantLoading, tenantId]);
 
     if (loading) return <div className="p-6">Cargando…</div>;
     if (!lead) return <div className="p-6">Lead no encontrado.</div>;

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 type Campaign = {
     id: string;
@@ -38,8 +39,9 @@ type CampaignProduct = {
     description?: string | null;
 };
 
-async function fetchCampaign(campaignId: string): Promise<Campaign> {
+async function fetchCampaign(campaignId: string, tenantId?: string): Promise<Campaign> {
     const rows = await sbFetch<Campaign[]>("/rest/v1/campaigns", {
+        tenantId,
         query: {
             select:
                 "id,code,name,description,objective,success_criteria,target_audience,llm_policy,llm_system_prompt,qualification_fields,allowed_intents,disallowed_topics,closing_reasons,is_active,opening_script,opening_question",
@@ -51,8 +53,9 @@ async function fetchCampaign(campaignId: string): Promise<Campaign> {
     return rows[0];
 }
 
-async function fetchProducts(campaignId: string): Promise<CampaignProduct[]> {
+async function fetchProducts(campaignId: string, tenantId?: string): Promise<CampaignProduct[]> {
     return sbFetch<CampaignProduct[]>("/rest/v1/campaign_products", {
+        tenantId,
         query: {
             select:
                 "id,campaign_id,code,name,price_monthly,currency,data,disclaimers,source_url,is_active,price_text,description",
@@ -63,8 +66,9 @@ async function fetchProducts(campaignId: string): Promise<CampaignProduct[]> {
     });
 }
 
-async function fetchCampaignIdByCode(code: string): Promise<string> {
+async function fetchCampaignIdByCode(code: string, tenantId?: string): Promise<string> {
     const rows = await sbFetch<{ id: string }[]>("/rest/v1/campaigns", {
+        tenantId,
         query: { select: "id", code: `eq.${code}`, limit: 1 },
     });
     const id = rows?.[0]?.id;
@@ -88,10 +92,12 @@ export default function DuplicateCampaignButton({
     className?: string;
 }) {
     const router = useRouter();
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
     const [busy, setBusy] = useState(false);
 
     async function onDuplicate() {
-        if (!campaignId) return;
+        if (!campaignId || tenantLoading || !tenantId) return;
 
         const ok = confirm("¿Duplicar esta campaña (incluye productos)?");
         if (!ok) return;
@@ -99,8 +105,8 @@ export default function DuplicateCampaignButton({
         setBusy(true);
         try {
             const [campaign, products] = await Promise.all([
-                fetchCampaign(campaignId),
-                fetchProducts(campaignId),
+                fetchCampaign(campaignId, tenantId),
+                fetchProducts(campaignId, tenantId),
             ]);
 
             const stamp = new Date()
@@ -118,6 +124,7 @@ export default function DuplicateCampaignButton({
             // 1) Crear campaña nueva
             await sbFetch<any>("/rest/v1/campaigns", {
                 method: "POST",
+                tenantId,
                 body: {
                     code: newCode,
                     name: newName,
@@ -138,7 +145,7 @@ export default function DuplicateCampaignButton({
             });
 
             // 2) Recuperar id nuevo por code
-            const newId = await fetchCampaignIdByCode(newCode);
+            const newId = await fetchCampaignIdByCode(newCode, tenantId);
 
             // 3) Duplicar productos
             if (products?.length) {
@@ -158,6 +165,7 @@ export default function DuplicateCampaignButton({
 
                 await sbFetch<any>("/rest/v1/campaign_products", {
                     method: "POST",
+                    tenantId,
                     body: newProducts,
                 });
             }
@@ -176,7 +184,7 @@ export default function DuplicateCampaignButton({
         <button
             type="button"
             onClick={onDuplicate}
-            disabled={busy}
+            disabled={busy || tenantLoading || !tenantId}
             className={
                 className ??
                 "rounded-lg border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"

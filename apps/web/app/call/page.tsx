@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 /** =======================
  *  Types
@@ -252,7 +253,7 @@ async function notifyCloseToTelegram(
     }
 }
 
-async function resolveLeadTelegramChatId(call: CallRow): Promise<string | null> {
+async function resolveLeadTelegramChatId(call: CallRow, tenantId?: string): Promise<string | null> {
     // 1) Si ya lo guardas en la call (recomendado)
     const direct =
         (call as any)?.customer_telegram_chat_id ??
@@ -278,6 +279,7 @@ async function resolveLeadTelegramChatId(call: CallRow): Promise<string | null> 
 
     try {
         const rows = await sbFetch<any[]>("/rest/v1/leads", {
+            tenantId,
             query: {
                 select: "telegram_chat_id,telegram_user_id",
                 id: `eq.${call.lead_id}`,
@@ -294,7 +296,7 @@ async function resolveLeadTelegramChatId(call: CallRow): Promise<string | null> 
 }
 
 
-async function notifyWebMessageToTelegram(args: { call: CallRow; from: string; text: string }) {
+async function notifyWebMessageToTelegram(args: { call: CallRow; from: string; text: string; tenantId?: string }) {
     const url = (WEBMSG_WEBHOOK_URL || "").trim();
     if (!url) return; // opcional
 
@@ -302,7 +304,7 @@ async function notifyWebMessageToTelegram(args: { call: CallRow; from: string; t
     if (!apiKey) return;
 
     // ✅ destino: LEAD (no asesor)
-    const lead_chat_id = await resolveLeadTelegramChatId(args.call);
+    const lead_chat_id = await resolveLeadTelegramChatId(args.call, args.tenantId);
     if (!lead_chat_id) {
         console.warn("No se pudo resolver telegram_chat_id del lead para enviar mensaje al cliente.", {
             call_id: args.call.id,
@@ -366,6 +368,8 @@ const QUICK_TEMPLATES: { label: string; text: (ctx: { phone?: string | null }) =
  *  ======================= */
 function CallPageInner() {
     const sp = useSearchParams();
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
     const rawId = sp.get("id") || "";
     const id = rawId.replace(/^=+/, "").trim(); // quita "=" iniciales
 
@@ -457,6 +461,7 @@ function CallPageInner() {
         if (!id) return;
 
         const callRes = await sbFetch<CallRow[]>("/rest/v1/calls", {
+            tenantId,
             query: {
                 select:
                     "id,lead_id,mode,status,started_at,ended_at,duration_sec,created_at,phone,agent_phone,twilio_call_sid,metadata,handoff_reason,handoff_at,assigned_channel,assigned_to,human_status,human_taken_by,human_taken_at,human_first_response_at,human_response_count,human_closed_at,human_last_message_text,human_last_message_at",
@@ -466,10 +471,12 @@ function CallPageInner() {
         });
 
         const recRes = await sbFetch<RecordingRow[]>("/rest/v1/recordings", {
+            tenantId,
             query: { select: "*", call_id: `eq.${id}`, order: "created_at.desc", limit: 10 },
         });
 
         const anaRes = await sbFetch<AnalysisRow[]>("/rest/v1/call_analysis", {
+            tenantId,
             query: {
                 select: "call_id,transcript,summary,intent,sentiment,next_best_action,lead_score,tags,created_at",
                 call_id: `eq.${id}`,
@@ -479,6 +486,7 @@ function CallPageInner() {
         });
 
         const hmRes = await sbFetch<HumanMsgRow[]>("/rest/v1/call_human_messages", {
+            tenantId,
             query: {
                 select: "id,call_id,from_chat_id,from_name,message_text,from_role,created_at",
                 call_id: `eq.${id}`,
@@ -603,6 +611,7 @@ function CallPageInner() {
 
             // refrescar SOLO call (sin recargar toda la página)
             const updated = await sbFetch<CallRow[]>("/rest/v1/calls", {
+                tenantId,
                 query: { select: "*", id: `eq.${call.id}`, limit: 1 },
             });
             setCall(updated?.[0] ?? call);
@@ -617,6 +626,7 @@ function CallPageInner() {
 
     async function refreshHumanMsgsOnly(callId: string) {
         const rows = await sbFetch<HumanMsgRow[]>("/rest/v1/call_human_messages", {
+            tenantId,
             query: {
                 select: "*",
                 call_id: `eq.${callId}`,
@@ -630,7 +640,10 @@ function CallPageInner() {
     async function refreshCallHumanLastOnly(callId: string) {
         const rows = await sbFetch<Pick<CallRow, "human_last_message_text" | "human_last_message_at" | "human_status">[]>(
             "/rest/v1/calls",
-            { query: { select: "human_last_message_text,human_last_message_at,human_status", id: `eq.${callId}`, limit: 1 } }
+            {
+                tenantId,
+                query: { select: "human_last_message_text,human_last_message_at,human_status", id: `eq.${callId}`, limit: 1 },
+            }
         );
 
         const patch = rows?.[0];
@@ -676,6 +689,7 @@ function CallPageInner() {
 
     async function refreshAssistantOnly(callId: string) {
         const rows = await sbFetch<{ metadata: any }[]>("/rest/v1/calls", {
+            tenantId,
             query: { select: "metadata", id: `eq.${callId}`, limit: 1 },
         });
 
@@ -876,7 +890,7 @@ function CallPageInner() {
     }
 
     async function sendHumanMessage(textOverride?: string) {
-        if (!id || !call) return;
+        if (!id || !call || tenantLoading || !tenantId) return;
 
         const text = (textOverride ?? newHumanMsg).trim();
         if (!text) return;
@@ -888,6 +902,7 @@ function CallPageInner() {
             // 1) insert msg
             await sbFetch("/rest/v1/call_human_messages", {
                 method: "POST",
+                tenantId,
                 query: { select: "id" },
                 body: {
                     call_id: id,
@@ -908,6 +923,7 @@ function CallPageInner() {
 
             await sbFetch("/rest/v1/calls?id=eq." + encodeURIComponent(id), {
                 method: "PATCH",
+                tenantId,
                 body: {
                     human_last_message_text: text,
                     human_last_message_at: nowIso,
@@ -920,7 +936,7 @@ function CallPageInner() {
 
             // 3) opcional: avisar por Telegram (n8n)
             try {
-                await notifyWebMessageToTelegram({ call, from: activeAdvisor, text });
+                await notifyWebMessageToTelegram({ call, from: activeAdvisor, text, tenantId });
             } catch (err: any) {
                 console.warn("No se pudo notificar Telegram (webmsg):", err?.message || err);
             }
@@ -939,7 +955,7 @@ function CallPageInner() {
     }
 
     async function closeCase() {
-        if (!id || !call) return;
+        if (!id || !call || tenantLoading || !tenantId) return;
 
         const reason = (closeReason || "").trim();
         if (!reason) {
@@ -961,6 +977,7 @@ function CallPageInner() {
 
             await sbFetch("/rest/v1/calls?id=eq." + encodeURIComponent(id), {
                 method: "PATCH",
+                tenantId,
                 body: {
                     human_status: "closed",
                     human_closed_at: nowIso,

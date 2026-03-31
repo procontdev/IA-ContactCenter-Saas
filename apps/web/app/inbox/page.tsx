@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 type Campaign = {
     id: string;
@@ -85,6 +86,8 @@ function matchesSearch(t: Thread, qRaw: string) {
 }
 
 export default function InboxPage() {
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
     const [loading, setLoading] = useState(true);
     const [loadingCampaigns, setLoadingCampaigns] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -107,6 +110,7 @@ export default function InboxPage() {
         setLoadingCampaigns(true);
         try {
             const rows = await sbFetch<Campaign[]>("/rest/v1/campaigns", {
+                tenantId,
                 query: { select: "id,code,name", order: "name.asc", limit: 500 },
             });
             setCampaigns(rows ?? []);
@@ -136,8 +140,8 @@ export default function InboxPage() {
             else if (state === "human") query.mode = "eq.human";
             else if (state === "pending") query.or = "(human_status.eq.pending,unread_count.gt.0)";
 
-            const rows = await sbFetch<Thread[]>("/rest/v1/v_inbox_threads", { query });
-            setThreads(rows ?? []);
+            const safeRows = await sbFetch<Thread[]>("/rest/v1/v_inbox_threads", { tenantId, query });
+            setThreads(safeRows ?? []);
         } catch (e: any) {
             setError(e?.message ?? String(e));
             setThreads([]);
@@ -147,13 +151,15 @@ export default function InboxPage() {
     }
 
     useEffect(() => {
+        if (tenantLoading || !tenantId) return;
         loadCampaigns().catch(() => { });
-    }, []);
+    }, [tenantLoading, tenantId]);
 
     useEffect(() => {
+        if (tenantLoading || !tenantId) return;
         loadThreads().catch(() => { });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [campaignId, state]);
+    }, [campaignId, state, tenantLoading, tenantId]);
 
     const filtered = useMemo(() => (threads ?? []).filter((t) => matchesSearch(t, q)), [threads, q]);
 

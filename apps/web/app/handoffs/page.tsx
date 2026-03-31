@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 import Link from "next/link";
 
 type CallRow = {
@@ -261,6 +262,8 @@ function fmtMins(m: number | null) {
 }
 
 export default function HandoffsPage() {
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
     const [rows, setRows] = useState<CallRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -295,6 +298,7 @@ export default function HandoffsPage() {
 
         try {
             const data = await sbFetch<CallRow[]>("/rest/v1/calls", {
+                tenantId,
                 query: {
                     select:
                         "id,lead_id,phone,mode,handoff_reason,handoff_at,assigned_channel,assigned_to,human_status,human_taken_by,human_taken_at,human_closed_at,human_last_message_text,human_last_message_at,human_first_response_at,human_response_count,metadata,updated_at",
@@ -330,6 +334,7 @@ export default function HandoffsPage() {
         try {
             await sbFetch("/rest/v1/calls?id=eq." + encodeURIComponent(row.id), {
                 method: "PATCH",
+                tenantId,
                 body: {
                     human_status: "in_progress",
                     human_taken_by: takenBy,
@@ -359,6 +364,7 @@ export default function HandoffsPage() {
         try {
             await sbFetch("/rest/v1/calls?id=eq." + encodeURIComponent(row.id), {
                 method: "PATCH",
+                tenantId,
                 body: {
                     human_status: "closed",
                     human_closed_at: new Date().toISOString(),
@@ -423,6 +429,7 @@ export default function HandoffsPage() {
 
                 await sbFetch(`/rest/v1/calls?id=eq.${encodeURIComponent(r.id)}`, {
                     method: "PATCH",
+                    tenantId,
                     body: { metadata: nextMeta },
                 });
             } catch (e: any) {
@@ -442,7 +449,10 @@ export default function HandoffsPage() {
         try {
             await sbFetch("/rest/v1/calls?id=eq." + encodeURIComponent(row.id), {
                 method: "PATCH",
-                body: { metadata: nextMeta },
+                tenantId,
+                body: {
+                    metadata: nextMeta
+                },
             });
             await load();
         } catch (e: any) {
@@ -467,7 +477,10 @@ export default function HandoffsPage() {
 
             await sbFetch("/rest/v1/calls?id=eq." + encodeURIComponent(row.id), {
                 method: "PATCH",
-                body: { metadata: nextMeta },
+                tenantId,
+                body: {
+                    metadata: nextMeta
+                },
             });
 
             await load();

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 type Thread = {
   call_id: string;
@@ -63,6 +64,8 @@ function TimeText({ iso }: { iso?: string | null }) {
 
 export default function InboxDetailPage() {
   const params = useParams();
+  const { context, loading: tenantLoading } = useTenant();
+  const tenantId = context?.tenantId || undefined;
   const callId = normalizeParam((params as any)?.callid);
 
   const [loading, setLoading] = useState(true);
@@ -93,6 +96,7 @@ export default function InboxDetailPage() {
     setLoading(true);
     try {
       const t = await sbFetch<Thread[]>("/rest/v1/v_inbox_threads", {
+        tenantId,
         query: {
           select:
             "call_id,lead_id,campaign_id,campaign_code,campaign_name,channel,mode,human_status," +
@@ -107,6 +111,7 @@ export default function InboxDetailPage() {
       setThread(threadRow);
 
       const ms = await sbFetch<Msg[]>("/rest/v1/call_messages", {
+        tenantId,
         query: {
           select: "id,call_id,role,channel,from_id,from_name,message_text,created_at,external_id,instance",
           call_id: `eq.${cid}`,
@@ -130,9 +135,11 @@ export default function InboxDetailPage() {
     const id = (cid ?? "").trim();
     if (!id) throw new Error("callId vacío");
     if (!isUuid(id)) throw new Error("callId inválido (no es UUID).");
+    if (tenantLoading || !tenantId) throw new Error("tenantId no disponible");
 
     await sbFetch("/rest/v1/calls", {
       method: "PATCH",
+      tenantId,
       query: { id: `eq.${id}` },
       headers: { Prefer: "return=representation" },
       body: patch,
@@ -146,6 +153,7 @@ export default function InboxDetailPage() {
   }
 
   useEffect(() => {
+    if (tenantLoading || !tenantId) return;
     // reset por cada callId
     didMarkReadRef.current = false;
 
@@ -174,7 +182,7 @@ export default function InboxDetailPage() {
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callId]);
+  }, [callId, tenantLoading, tenantId]);
 
   const toPhone = useMemo(() => {
     return (

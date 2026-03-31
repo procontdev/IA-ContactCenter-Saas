@@ -24,7 +24,7 @@ async function coreFetch<T>(path: string, opts: FetchOpts = {}): Promise<T> {
   if (opts.tenantId && (opts.method === 'GET' || !opts.method)) {
     // Si no hay un filtro de tenant_id ya definido, lo inyectamos
     if (!finalQuery.tenant_id) {
-       finalQuery.tenant_id = `eq.${opts.tenantId}`;
+      finalQuery.tenant_id = `eq.${opts.tenantId}`;
     }
   }
 
@@ -45,17 +45,19 @@ async function coreFetch<T>(path: string, opts: FetchOpts = {}): Promise<T> {
     }
   }
 
+  const finalHeaders = {
+    apikey: SB_ANON,
+    Authorization: `Bearer ${SB_ANON}`,
+    Accept: "application/json",
+    "Accept-Profile": schema,
+    "Content-Profile": schema,
+    ...(finalBody ? { "Content-Type": "application/json" } : {}),
+    ...(opts.headers ?? {}),
+  };
+
   const res = await fetch(url.toString(), {
     method: opts.method || "GET",
-    headers: {
-      apikey: SB_ANON,
-      Authorization: `Bearer ${SB_ANON}`,
-      Accept: "application/json",
-      "Accept-Profile": schema,
-      "Content-Profile": schema,
-      ...(finalBody ? { "Content-Type": "application/json" } : {}),
-      ...(opts.headers ?? {}),
-    },
+    headers: finalHeaders,
     body: finalBody ? JSON.stringify(finalBody) : undefined,
     cache: "no-store",
   });
@@ -72,17 +74,17 @@ async function coreFetch<T>(path: string, opts: FetchOpts = {}): Promise<T> {
 
 // Client fetch (también sirve en server, pero dejo ambos por claridad)
 export async function sbFetch<T>(path: string, opts: FetchOpts = {}): Promise<T> {
-    return coreFetch<T>(path, opts);
+  return coreFetch<T>(path, opts);
 }
 
 // Server fetch (mismo comportamiento, útil para Server Components/generateStaticParams)
 export async function sbFetchServer<T>(path: string, opts: FetchOpts = {}): Promise<T> {
-    return coreFetch<T>(path, { ...opts, cache: "force-cache" });
+  return coreFetch<T>(path, { ...opts, cache: "force-cache" });
 }
 
 
 // Helpers
 export function publicRecordingUrl(keyOrPath: string) {
-    const path = keyOrPath.startsWith("recordings/") ? keyOrPath : `recordings/${keyOrPath}`;
-    return `${SB_URL}/storage/v1/object/public/${path}`;
+  const path = keyOrPath.startsWith("recordings/") ? keyOrPath : `recordings/${keyOrPath}`;
+  return `${SB_URL}/storage/v1/object/public/${path}`;
 }

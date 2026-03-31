@@ -4,6 +4,7 @@ import Link from "next/link";
 import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 type Lead = {
     id: string;
@@ -207,8 +208,9 @@ function buildCallContext(call: Call | null): CallContext | null {
     };
 }
 
-async function fetchCalls(leadId: string) {
+async function fetchCalls(leadId: string, tenantId?: string) {
     return sbFetch<Call[]>("/rest/v1/calls", {
+        tenantId,
         query: {
             select:
                 "id,lead_id,mode,status,started_at,ended_at,created_at,duration_sec,phone,twilio_call_sid," +
@@ -220,10 +222,11 @@ async function fetchCalls(leadId: string) {
     });
 }
 
-async function fetchLeadWithCampaign(leadId: string) {
+async function fetchLeadWithCampaign(leadId: string, tenantId?: string) {
     // 1) Intentar view (recomendado)
     try {
         const v = await sbFetch<Lead[]>("/rest/v1/v_leads_with_campaign", {
+            tenantId,
             query: { select: "*", id: `eq.${leadId}`, limit: 1 },
         });
         if (v?.[0]) return v[0];
@@ -233,15 +236,17 @@ async function fetchLeadWithCampaign(leadId: string) {
 
     // 2) Fallback: tabla leads (sin campaign_name/objective)
     const t = await sbFetch<Lead[]>("/rest/v1/leads", {
+        tenantId,
         query: { select: "*", id: `eq.${leadId}`, limit: 1 },
     });
     return t?.[0] ?? null;
 }
 
-async function fetchWowInsight(leadId: string) {
+async function fetchWowInsight(leadId: string, tenantId?: string) {
     // Intentamos la view WOW (la que ya usas en wow-queue)
     try {
         const v = await sbFetch<WowInsight[]>("/rest/v1/v_leads_wow_queue", {
+            tenantId,
             query: {
                 select:
                     "id,campaign_id,campaign,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons",
@@ -258,6 +263,8 @@ async function fetchWowInsight(leadId: string) {
 function LeadWowViewInner() {
     const sp = useSearchParams();
     const router = useRouter();
+    const { context, loading: tenantLoading } = useTenant();
+    const tenantId = context?.tenantId || undefined;
 
     const rawId = sp.get("id");
     const id = useMemo(() => {
@@ -312,6 +319,7 @@ function LeadWowViewInner() {
         let alive = true;
 
         async function run() {
+            if (tenantLoading || !tenantId) return;
             if (!id) {
                 setLoading(false);
                 setError("Falta parámetro id");
@@ -323,9 +331,9 @@ function LeadWowViewInner() {
 
             try {
                 const [leadItem, callsRes, wowRes] = await Promise.all([
-                    fetchLeadWithCampaign(id),
-                    fetchCalls(id),
-                    fetchWowInsight(id),
+                    fetchLeadWithCampaign(id, tenantId),
+                    fetchCalls(id, tenantId),
+                    fetchWowInsight(id, tenantId),
                 ]);
 
                 if (!alive) return;
@@ -345,7 +353,7 @@ function LeadWowViewInner() {
         return () => {
             alive = false;
         };
-    }, [id]);
+    }, [id, tenantLoading, tenantId]);
 
     const N8N_BASE =
         process.env.NEXT_PUBLIC_N8N_BASE_URL || "https://elastica-n8n.3haody.easypanel.host";
