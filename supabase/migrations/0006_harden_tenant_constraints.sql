@@ -134,6 +134,7 @@ CREATE OR REPLACE VIEW contact_center.v_campaign_stats AS
           GROUP BY campaign_id, tenant_id
         ), base AS (
          SELECT c.id AS campaign_id,
+            c.tenant_id,
             c.code AS campaign_code,
             c.name AS campaign_name,
             c.is_active,
@@ -164,23 +165,53 @@ CREATE OR REPLACE VIEW contact_center.v_campaign_stats AS
             count(ca.id) FILTER (WHERE ((lower(COALESCE((ca.metadata #>> '{llm,service_interest}'::text[]), ''::text)) ~~ 'portab%'::text) OR (lower(COALESCE((ca.metadata #>> '{assistant,intent}'::text[]), ''::text)) = 'portabilidad'::text))) AS intent_portabilidad,
             count(ca.id) FILTER (WHERE ((lower(COALESCE((ca.metadata #>> '{llm,service_interest}'::text[]), ''::text)) = 'alta'::text) OR (lower(COALESCE((ca.metadata #>> '{assistant,intent}'::text[]), ''::text)) = 'alta'::text))) AS intent_alta,
             count(ca.id) FILTER (WHERE ((lower(COALESCE((ca.metadata #>> '{assistant,intent}'::text[]), ''::text)) = 'info'::text) OR (lower(COALESCE((ca.metadata #>> '{llm,service_interest}'::text[]), ''::text)) = 'info'::text))) AS intent_info,
-            c.description,
-            c.created_at,
-            c.updated_at,
-            COALESCE(p.products_total, (0)::bigint) AS products_total,
-            c.tenant_id
+             c.description,
+             c.created_at,
+             c.updated_at,
+            COALESCE(p.products_total, (0)::bigint) AS products_total
            FROM (((contact_center.campaigns c
              LEFT JOIN contact_center.leads l ON ((l.campaign_id = c.id)))
              LEFT JOIN contact_center.calls ca ON ((ca.lead_id = l.id)))
              LEFT JOIN prod p ON ((p.campaign_id = c.id)))
-          GROUP BY c.id, c.code, c.name, c.is_active, c.description, c.created_at, c.updated_at, p.products_total, c.tenant_id
+          GROUP BY c.id, c.tenant_id, c.code, c.name, c.is_active, c.description, c.created_at, c.updated_at, p.products_total
         )
- SELECT * FROM base;
+  SELECT base.campaign_id,
+    base.tenant_id,
+    base.campaign_code,
+    base.campaign_name,
+    base.is_active,
+    base.leads_total,
+    base.leads_contesto,
+    base.leads_no_contesto,
+    base.calls_total,
+    base.calls_llm,
+    base.calls_human,
+    base.calls_completed,
+    base.avg_duration_sec,
+    base.last_call_at,
+    base.leads_with_calls,
+    base.contact_rate_pct,
+    base.calls_per_lead_avg,
+    base.calls_unsuccessful,
+    base.calls_with_recording,
+    base.avg_llm_duration_sec,
+    base.avg_human_duration_sec,
+    base.handoff_total,
+    base.human_engaged_total,
+    base.intent_portabilidad,
+    base.intent_alta,
+    base.intent_info,
+    base.description,
+    base.created_at,
+    base.updated_at,
+    base.products_total
+   FROM base;
 
 -- v_inbox_threads (Already defined before message update in chunk)
 CREATE OR REPLACE VIEW contact_center.v_inbox_threads AS
  SELECT c.id AS call_id,
     c.lead_id,
+    c.tenant_id,
     l.campaign_id,
     cam.code AS campaign_code,
     cam.name AS campaign_name,
@@ -207,8 +238,7 @@ CREATE OR REPLACE VIEW contact_center.v_inbox_threads AS
           WHERE ((m.call_id = c.id) AND (m.role = 'lead'::text) AND (m.created_at > COALESCE(c.human_last_seen_at, c.handoff_at, c.created_at, '1970-01-01 00:00:00+00'::timestamp with time zone)))) AS unread_count,
     ( SELECT count(*) AS count
            FROM contact_center.call_messages m
-          WHERE (m.call_id = c.id)) AS message_count,
-    c.tenant_id
+          WHERE (m.call_id = c.id)) AS message_count
    FROM (((contact_center.calls c
      LEFT JOIN contact_center.leads l ON ((l.id = c.lead_id)))
      LEFT JOIN contact_center.campaigns cam ON ((cam.id = l.campaign_id)))
@@ -235,10 +265,10 @@ CREATE OR REPLACE VIEW contact_center.v_inbox_messages AS
     m.external_ts,
     m.instance,
     c.lead_id,
+    c.tenant_id,
     l.campaign_id,
     cam.code AS campaign_code,
-    cam.name AS campaign_name,
-    m.tenant_id
+    cam.name AS campaign_name
    FROM (((contact_center.call_messages m
      JOIN contact_center.calls c ON ((c.id = m.call_id)))
      LEFT JOIN contact_center.leads l ON ((l.id = c.lead_id)))
@@ -248,6 +278,7 @@ CREATE OR REPLACE VIEW contact_center.v_inbox_messages AS
 CREATE OR REPLACE VIEW contact_center.v_calls_outbound_dashboard_v2 AS
  SELECT v.call_id,
     v.lead_id,
+    v.tenant_id,
     v.campaign_id,
     v.campaign_name,
     v.campaign_code,
@@ -288,8 +319,7 @@ CREATE OR REPLACE VIEW contact_center.v_calls_outbound_dashboard_v2 AS
         CASE
             WHEN ((v.status_norm = 'queued'::text) AND (v.started_at IS NOT NULL) AND (v.ended_at IS NULL) AND (c.created_at < (now() - '00:10:00'::interval))) THEN true
             ELSE false
-        END AS is_stale_queued,
-    v.tenant_id
+        END AS is_stale_queued
    FROM (contact_center.v_calls_outbound_dashboard v
      JOIN contact_center.calls c ON ((c.id = v.call_id)));
 
@@ -297,6 +327,7 @@ CREATE OR REPLACE VIEW contact_center.v_calls_outbound_dashboard_v2 AS
 CREATE OR REPLACE VIEW contact_center.v_calls_outbound_dashboard_final AS
  SELECT v.call_id,
     v.lead_id,
+    v.tenant_id,
     v.mode,
     v.campaign_id,
     v.campaign_name,
@@ -329,8 +360,7 @@ CREATE OR REPLACE VIEW contact_center.v_calls_outbound_dashboard_final AS
         CASE
             WHEN ((lower(replace(regexp_replace(COALESCE(v.status_norm, ''::text), '^\s+|\s+$'::text, ''::text, 'g'::text), '_'::text, '-'::text)) = 'queued'::text) AND (v.started_at IS NOT NULL) AND (v.ended_at IS NULL) AND (v.created_at < (now() - '00:10:00'::interval))) THEN true
             ELSE false
-        END AS is_stale_queued,
-    v.tenant_id
+        END AS is_stale_queued
    FROM contact_center.v_calls_outbound_dashboard_v2 v;
 
 -- v_leads_with_campaign
