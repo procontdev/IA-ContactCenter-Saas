@@ -95,14 +95,18 @@ BEGIN
 
     INSERT INTO platform_core.tenant_users (tenant_id, user_id, role, is_primary)
     VALUES (v_tenant_id, p_user_id, p_role, p_make_primary)
-    ON CONFLICT (tenant_id, user_id)
+    ON CONFLICT ON CONSTRAINT tenant_users_tenant_id_user_id_key
     DO UPDATE SET
         role = EXCLUDED.role,
         is_primary = EXCLUDED.is_primary,
         updated_at = now();
 
     RETURN QUERY
-    SELECT tu.tenant_id, tu.user_id, tu.role, tu.is_primary
+    SELECT
+        tu.tenant_id AS tenant_id,
+        tu.user_id AS user_id,
+        tu.role AS role,
+        tu.is_primary AS is_primary
     FROM platform_core.tenant_users tu
     WHERE tu.tenant_id = v_tenant_id
       AND tu.user_id = p_user_id
