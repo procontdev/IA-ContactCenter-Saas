@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 
 // Ajusta este import según tu proyecto:
 import { sbFetch } from "@/lib/supabaseRest";
+import { readAccessTokenFromLocalStorage } from "@/lib/tenant/tenant-resolver";
 import { useTenant } from "@/lib/tenant/use-tenant";
 
 type Campaign = {
@@ -82,6 +83,36 @@ type CampaignStatsRow = {
     created_at?: string | null;
     updated_at?: string | null;
 };
+
+type OpsSettings = {
+    primary_channel: string;
+    enabled_channels: string[];
+    handoff: {
+        enabled: boolean;
+        trigger: string;
+        sla_minutes: number | null;
+    };
+    flags: {
+        outbound_enabled: boolean;
+        auto_assign: boolean;
+        human_override: boolean;
+    };
+};
+
+type CampaignSettingsItem = {
+    campaign_id: string;
+    tenant_id: string;
+    inbound_enabled: boolean;
+    inbound_default_mode: "human" | "llm";
+    inbound_llm_text_enabled: boolean;
+    llm_fallback_to_human: boolean;
+    wa_instance: string | null;
+    wa_business_phone: string | null;
+    ops_settings: OpsSettings;
+    updated_at: string;
+};
+
+const CHANNEL_OPTIONS = ["whatsapp", "voice", "webchat", "email", "sms", "telegram"];
 
 async function fetchCampaign(id: string, tenantId?: string): Promise<Campaign | null> {
     const res = await sbFetch<Campaign[]>("/rest/v1/campaigns", {
@@ -174,6 +205,61 @@ export default function CampaignDetailPage() {
     const [products, setProducts] = useState<CampaignProduct[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [settings, setSettings] = useState<CampaignSettingsItem | null>(null);
+    const [settingsLoading, setSettingsLoading] = useState(true);
+    const [settingsSaving, setSettingsSaving] = useState(false);
+    const [settingsError, setSettingsError] = useState<string | null>(null);
+    const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
+
+    const [primaryChannel, setPrimaryChannel] = useState("whatsapp");
+    const [enabledChannels, setEnabledChannels] = useState<string[]>(["whatsapp"]);
+    const [handoffEnabled, setHandoffEnabled] = useState(false);
+    const [handoffTrigger, setHandoffTrigger] = useState("intent_or_no_response");
+    const [handoffSlaMinutes, setHandoffSlaMinutes] = useState("");
+    const [flagOutboundEnabled, setFlagOutboundEnabled] = useState(true);
+    const [flagAutoAssign, setFlagAutoAssign] = useState(false);
+    const [flagHumanOverride, setFlagHumanOverride] = useState(true);
+    const [inboundEnabled, setInboundEnabled] = useState(true);
+    const [inboundDefaultMode, setInboundDefaultMode] = useState<"human" | "llm">("human");
+    const [inboundLlmTextEnabled, setInboundLlmTextEnabled] = useState(false);
+    const [llmFallbackToHuman, setLlmFallbackToHuman] = useState(true);
+    const [waInstance, setWaInstance] = useState("");
+    const [waBusinessPhone, setWaBusinessPhone] = useState("");
+
+    const canManageSettings = context?.role === "tenant_admin" || context?.role === "superadmin";
+
+    function authHeaders() {
+        const token = readAccessTokenFromLocalStorage();
+        if (!token) throw new Error("No access token in localStorage");
+        return {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+        };
+    }
+
+    function hydrateSettingsForm(item: CampaignSettingsItem) {
+        setSettings(item);
+        setPrimaryChannel(item.ops_settings.primary_channel || "whatsapp");
+        setEnabledChannels(
+            Array.isArray(item.ops_settings.enabled_channels) && item.ops_settings.enabled_channels.length > 0
+                ? item.ops_settings.enabled_channels
+                : [item.ops_settings.primary_channel || "whatsapp"]
+        );
+        setHandoffEnabled(item.ops_settings.handoff?.enabled === true);
+        setHandoffTrigger(item.ops_settings.handoff?.trigger || "intent_or_no_response");
+        setHandoffSlaMinutes(
+            item.ops_settings.handoff?.sla_minutes == null ? "" : String(item.ops_settings.handoff.sla_minutes)
+        );
+        setFlagOutboundEnabled(item.ops_settings.flags?.outbound_enabled !== false);
+        setFlagAutoAssign(item.ops_settings.flags?.auto_assign === true);
+        setFlagHumanOverride(item.ops_settings.flags?.human_override !== false);
+        setInboundEnabled(item.inbound_enabled === true);
+        setInboundDefaultMode(item.inbound_default_mode === "llm" ? "llm" : "human");
+        setInboundLlmTextEnabled(item.inbound_llm_text_enabled === true);
+        setLlmFallbackToHuman(item.llm_fallback_to_human === true);
+        setWaInstance(item.wa_instance || "");
+        setWaBusinessPhone(item.wa_business_phone || "");
+    }
 
     useEffect(() => {
         let alive = true;
@@ -214,6 +300,126 @@ export default function CampaignDetailPage() {
             alive = false;
         };
     }, [id, tenantLoading, tenantId]);
+
+    useEffect(() => {
+        let alive = true;
+
+        async function loadSettings() {
+            if (tenantLoading || !tenantId || !id) return;
+            setSettingsLoading(true);
+            setSettingsError(null);
+            setSettingsSuccess(null);
+
+            try {
+                const res = await fetch(`/api/campaigns/${id}/settings`, {
+                    method: "GET",
+                    headers: authHeaders(),
+                    cache: "no-store",
+                });
+                const data = (await res.json().catch(() => ({}))) as { item?: CampaignSettingsItem; error?: string };
+                if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+                if (!data.item) throw new Error("No campaign settings returned");
+                if (!alive) return;
+                hydrateSettingsForm(data.item);
+            } catch (e: any) {
+                if (!alive) return;
+                setSettingsError(e?.message || "Error cargando campaign settings");
+                setSettings(null);
+            } finally {
+                if (!alive) return;
+                setSettingsLoading(false);
+            }
+        }
+
+        void loadSettings();
+        return () => {
+            alive = false;
+        };
+    }, [id, tenantId, tenantLoading]);
+
+    async function onSaveSettings() {
+        if (!canManageSettings) {
+            setSettingsError("Solo tenant_admin puede actualizar campaign settings.");
+            return;
+        }
+
+        const normalizedEnabled = Array.from(new Set(enabledChannels.map((c) => String(c || "").trim().toLowerCase())))
+            .filter((c) => CHANNEL_OPTIONS.includes(c));
+        if (normalizedEnabled.length === 0) {
+            setSettingsError("Selecciona al menos un canal habilitado.");
+            return;
+        }
+
+        const normalizedPrimary = CHANNEL_OPTIONS.includes(primaryChannel) ? primaryChannel : normalizedEnabled[0];
+        if (!normalizedEnabled.includes(normalizedPrimary)) {
+            normalizedEnabled.unshift(normalizedPrimary);
+        }
+
+        const digitsOnlyPhone = String(waBusinessPhone || "").replace(/[^\d]/g, "");
+        if (digitsOnlyPhone && (digitsOnlyPhone.length < 8 || digitsOnlyPhone.length > 15)) {
+            setSettingsError("WA business phone inválido. Debe contener 8 a 15 dígitos.");
+            return;
+        }
+
+        const slaRaw = String(handoffSlaMinutes || "").trim();
+        const parsedSla = Number(slaRaw);
+        const hasSla = slaRaw.length > 0;
+        if (hasSla && (!Number.isFinite(parsedSla) || parsedSla < 1 || parsedSla > 180)) {
+            setSettingsError("SLA handoff inválido. Usa un número entre 1 y 180 minutos.");
+            return;
+        }
+        const slaNum = hasSla ? Math.floor(parsedSla) : null;
+
+        setSettingsSaving(true);
+        setSettingsError(null);
+        setSettingsSuccess(null);
+        try {
+            const res = await fetch(`/api/campaigns/${id}/settings`, {
+                method: "PATCH",
+                headers: authHeaders(),
+                body: JSON.stringify({
+                    primary_channel: normalizedPrimary,
+                    enabled_channels: normalizedEnabled,
+                    handoff: {
+                        enabled: handoffEnabled,
+                        trigger: String(handoffTrigger || "intent_or_no_response").trim() || "intent_or_no_response",
+                        sla_minutes: slaNum == null ? null : Math.floor(slaNum),
+                    },
+                    flags: {
+                        outbound_enabled: flagOutboundEnabled,
+                        auto_assign: flagAutoAssign,
+                        human_override: flagHumanOverride,
+                    },
+                    inbound_enabled: inboundEnabled,
+                    inbound_default_mode: inboundDefaultMode,
+                    inbound_llm_text_enabled: inboundLlmTextEnabled,
+                    llm_fallback_to_human: llmFallbackToHuman,
+                    wa_instance: waInstance.trim(),
+                    wa_business_phone: digitsOnlyPhone,
+                }),
+            });
+            const data = (await res.json().catch(() => ({}))) as { item?: CampaignSettingsItem; error?: string };
+            if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+            if (!data.item) throw new Error("No campaign settings returned");
+            hydrateSettingsForm(data.item);
+            setSettingsSuccess("Campaign settings actualizados");
+        } catch (e: any) {
+            setSettingsError(e?.message || "Error guardando campaign settings");
+        } finally {
+            setSettingsSaving(false);
+        }
+    }
+
+    function toggleChannel(channel: string) {
+        setEnabledChannels((prev) => {
+            const has = prev.includes(channel);
+            if (has) {
+                const next = prev.filter((x) => x !== channel);
+                return next.length > 0 ? next : [channel];
+            }
+            return [...prev, channel];
+        });
+    }
 
     if (loading) {
         return (
@@ -352,6 +558,206 @@ export default function CampaignDetailPage() {
                         <b>Opening question:</b> {campaign.opening_question || "-"}
                     </div>
                 </div>
+            </div>
+
+            <div className="rounded-xl border p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <div className="font-medium">Campaign settings · channel assignment</div>
+                        <div className="text-xs text-muted-foreground">
+                            Configuración operativa por campaña (MVP tenant-aware).
+                        </div>
+                    </div>
+                    {!canManageSettings && (
+                        <div className="text-xs text-muted-foreground">Solo tenant_admin puede editar.</div>
+                    )}
+                </div>
+
+                {settingsLoading ? (
+                    <div className="text-sm text-muted-foreground">Cargando campaign settings...</div>
+                ) : (
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label className="space-y-1">
+                                <div className="text-xs text-muted-foreground">Canal principal</div>
+                                <select
+                                    className="w-full rounded-md border px-3 py-2 text-sm"
+                                    value={primaryChannel}
+                                    onChange={(e) => setPrimaryChannel(e.target.value)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                >
+                                    {CHANNEL_OPTIONS.map((ch) => (
+                                        <option key={ch} value={ch}>
+                                            {ch}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <label className="space-y-1">
+                                <div className="text-xs text-muted-foreground">Modo inbound por defecto</div>
+                                <select
+                                    className="w-full rounded-md border px-3 py-2 text-sm"
+                                    value={inboundDefaultMode}
+                                    onChange={(e) => setInboundDefaultMode(e.target.value as "human" | "llm")}
+                                    disabled={!canManageSettings || settingsSaving}
+                                >
+                                    <option value="human">human</option>
+                                    <option value="llm">llm</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="text-xs text-muted-foreground">Canales habilitados</div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {CHANNEL_OPTIONS.map((ch) => (
+                                    <label key={ch} className="flex items-center gap-2 text-sm">
+                                        <input
+                                            type="checkbox"
+                                            checked={enabledChannels.includes(ch)}
+                                            onChange={() => toggleChannel(ch)}
+                                            disabled={!canManageSettings || settingsSaving}
+                                        />
+                                        {ch}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <label className="flex items-center gap-2 text-sm pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={handoffEnabled}
+                                    onChange={(e) => setHandoffEnabled(e.target.checked)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                                Handoff habilitado
+                            </label>
+
+                            <label className="space-y-1">
+                                <div className="text-xs text-muted-foreground">Trigger handoff</div>
+                                <input
+                                    className="w-full rounded-md border px-3 py-2 text-sm"
+                                    value={handoffTrigger}
+                                    onChange={(e) => setHandoffTrigger(e.target.value)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                            </label>
+
+                            <label className="space-y-1">
+                                <div className="text-xs text-muted-foreground">SLA handoff (min)</div>
+                                <input
+                                    className="w-full rounded-md border px-3 py-2 text-sm"
+                                    value={handoffSlaMinutes}
+                                    onChange={(e) => setHandoffSlaMinutes(e.target.value)}
+                                    placeholder="ej: 15"
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <label className="flex items-center gap-2 text-sm pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={flagOutboundEnabled}
+                                    onChange={(e) => setFlagOutboundEnabled(e.target.checked)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                                Outbound habilitado
+                            </label>
+                            <label className="flex items-center gap-2 text-sm pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={flagAutoAssign}
+                                    onChange={(e) => setFlagAutoAssign(e.target.checked)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                                Auto-assign
+                            </label>
+                            <label className="flex items-center gap-2 text-sm pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={flagHumanOverride}
+                                    onChange={(e) => setFlagHumanOverride(e.target.checked)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                                Human override
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label className="space-y-1">
+                                <div className="text-xs text-muted-foreground">WA instance</div>
+                                <input
+                                    className="w-full rounded-md border px-3 py-2 text-sm"
+                                    value={waInstance}
+                                    onChange={(e) => setWaInstance(e.target.value)}
+                                    placeholder="ej: wa-main"
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                            </label>
+                            <label className="space-y-1">
+                                <div className="text-xs text-muted-foreground">WA business phone</div>
+                                <input
+                                    className="w-full rounded-md border px-3 py-2 text-sm"
+                                    value={waBusinessPhone}
+                                    onChange={(e) => setWaBusinessPhone(e.target.value)}
+                                    placeholder="ej: 51999999999"
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <label className="flex items-center gap-2 text-sm pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={inboundEnabled}
+                                    onChange={(e) => setInboundEnabled(e.target.checked)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                                Inbound habilitado
+                            </label>
+                            <label className="flex items-center gap-2 text-sm pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={inboundLlmTextEnabled}
+                                    onChange={(e) => setInboundLlmTextEnabled(e.target.checked)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                                Inbound LLM texto
+                            </label>
+                            <label className="flex items-center gap-2 text-sm pt-1">
+                                <input
+                                    type="checkbox"
+                                    checked={llmFallbackToHuman}
+                                    onChange={(e) => setLlmFallbackToHuman(e.target.checked)}
+                                    disabled={!canManageSettings || settingsSaving}
+                                />
+                                Fallback a humano
+                            </label>
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <button
+                                onClick={onSaveSettings}
+                                disabled={!canManageSettings || settingsSaving || settingsLoading}
+                                className="rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
+                            >
+                                {settingsSaving ? "Guardando..." : "Guardar campaign settings"}
+                            </button>
+                            <div className="text-xs text-muted-foreground">
+                                updated_at: {settings?.updated_at ? fmtDate(settings.updated_at) : "-"}
+                            </div>
+                        </div>
+
+                        {settingsError && <div className="text-sm text-red-600">{settingsError}</div>}
+                        {settingsSuccess && <div className="text-sm text-emerald-600">{settingsSuccess}</div>}
+                    </>
+                )}
             </div>
 
             {/* Tabs simples (sin librería): Stats JSON + Productos */}
