@@ -56,6 +56,7 @@ CREATE OR REPLACE VIEW contact_center.v_calls_audit AS
 CREATE OR REPLACE VIEW contact_center.v_calls_outbound_dashboard AS
  SELECT c.id AS call_id,
     c.lead_id,
+    c.tenant_id,
     l.campaign_id,
     camp.name AS campaign_name,
     camp.code AS campaign_code,
@@ -113,8 +114,7 @@ CREATE OR REPLACE VIEW contact_center.v_calls_outbound_dashboard AS
     ca.follow_up_needed,
     ca.follow_up_datetime_iso,
     rec.recording_url,
-    rec.duration_sec AS recording_duration_sec,
-    c.tenant_id
+    rec.duration_sec AS recording_duration_sec
    FROM ((((contact_center.calls c
      LEFT JOIN contact_center.leads l ON ((l.id = c.lead_id)))
      LEFT JOIN contact_center.campaigns camp ON ((camp.id = l.campaign_id)))
