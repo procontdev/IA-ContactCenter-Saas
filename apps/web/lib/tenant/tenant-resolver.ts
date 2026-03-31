@@ -134,34 +134,32 @@ async function fetchCurrentUserFromAuth(
   }
 }
 
-async function fetchTenantUser(
+async function fetchMyTenantContext(
   baseUrl: string,
   accessToken: string,
-  userId: string,
   fetchImpl: typeof fetch
 ): Promise<TenantUserRow | null> {
-  const url = new URL(`${baseUrl}/rest/v1/tenant_users`);
-  url.searchParams.set('select', 'tenant_id,role,is_primary');
-  url.searchParams.set('user_id', `eq.${userId}`);
-  url.searchParams.set('is_primary', 'eq.true');
-  url.searchParams.set('order', 'is_primary.desc');
-  url.searchParams.set('limit', '1');
-
   try {
-    const res = await fetchImpl(url.toString(), {
-      method: 'GET',
+    const res = await fetchImpl(`${baseUrl}/rest/v1/rpc/resolve_my_tenant_context`, {
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
         apikey: pickEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY'),
         Accept: 'application/json',
+        'Content-Type': 'application/json',
         'Accept-Profile': 'platform_core',
+        'Content-Profile': 'platform_core',
       },
+      body: '{}',
       cache: 'no-store',
     });
 
     if (!res.ok) return null;
-    const rows = (await res.json()) as TenantUserRow[];
-    return rows?.[0] ?? null;
+
+    const payload = (await res.json()) as TenantUserRow[] | TenantUserRow | null;
+    if (!payload) return null;
+    if (Array.isArray(payload)) return payload[0] ?? null;
+    return payload;
   } catch {
     return null;
   }
@@ -188,7 +186,7 @@ export async function resolveTenantContext(userSession?: any, opts?: ResolveTena
       const userId = authUser?.id || userSession?.user?.id || userSession?.id || null;
 
       if (userId) {
-        const tenantUser = await fetchTenantUser(baseUrl, token, String(userId), fetchImpl);
+        const tenantUser = await fetchMyTenantContext(baseUrl, token, fetchImpl);
         if (tenantUser?.tenant_id) {
           const role = normalizeRole(tenantUser.role || sessionFromInput.role);
           return {
