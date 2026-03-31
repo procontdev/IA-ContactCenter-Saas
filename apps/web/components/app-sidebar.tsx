@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { TenantSwitcher } from "@/components/tenant-switcher";
 
 const items = [
     { href: "/dashboard", label: "Dashboard" },
@@ -18,6 +19,7 @@ export function AppSidebar() {
     return (
         <aside className="w-64 border-r bg-card">
             <div className="p-4 font-semibold">Orquesta IA Crm</div>
+            <TenantSwitcher />
             <nav className="px-2 space-y-1">
                 {items.map((it) => {
                     const active = pathname === it.href;

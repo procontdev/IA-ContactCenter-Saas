@@ -23,3 +23,12 @@ export interface TenantContext {
   role: UserRole | null;
   isSuperAdmin: boolean;
 }
+
+export interface TenantMembership {
+  tenant_id: string;
+  name: string;
+  slug: string;
+  role: UserRole;
+  is_primary: boolean;
+  is_active: boolean;
+}

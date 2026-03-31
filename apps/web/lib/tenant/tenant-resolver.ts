@@ -90,7 +90,7 @@ function tryReadTenantFromSession(userSession?: any): { tenantId: string | null;
   return { tenantId, role };
 }
 
-function parseAuthTokenFromLocalStorage(): string | null {
+export function readAccessTokenFromLocalStorage(): string | null {
   if (typeof window === 'undefined' || !window.localStorage) return null;
 
   for (let i = 0; i < window.localStorage.length; i += 1) {
@@ -179,7 +179,7 @@ export async function resolveTenantContext(userSession?: any, opts?: ResolveTena
   const sessionFromInput = tryReadTenantFromSession(userSession);
 
   if (baseUrl) {
-    const token = typeof opts?.accessToken === 'string' ? opts.accessToken : parseAuthTokenFromLocalStorage();
+    const token = typeof opts?.accessToken === 'string' ? opts.accessToken : readAccessTokenFromLocalStorage();
 
     if (token) {
       const authUser = await fetchCurrentUserFromAuth(baseUrl, token, fetchImpl);

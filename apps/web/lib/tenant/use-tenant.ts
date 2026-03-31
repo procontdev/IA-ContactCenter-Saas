@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { TenantContext } from './tenant-types';
 import { resolveTenantContext } from './tenant-resolver';
 
+const TENANT_CONTEXT_EVENT = 'tenant-context-changed';
+
 /**
  * Hook para obtener el contexto del tenant en componentes del lado del cliente.
  */
@@ -9,21 +11,34 @@ export function useTenant() {
   const [context, setContext] = useState<TenantContext | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        // En esta fase, pasamos null para que use el default
-        // Más adelante, pasaremos la sesión real de Supabase
-        const ctx = await resolveTenantContext();
-        setContext(ctx);
-      } catch (e) {
-        console.error('Error loading tenant context:', e);
-      } finally {
-        setLoading(false);
-      }
+  async function refreshContext() {
+    try {
+      const ctx = await resolveTenantContext();
+      setContext(ctx);
+    } catch (e) {
+      console.error('Error loading tenant context:', e);
+    } finally {
+      setLoading(false);
     }
-    load();
+  }
+
+  useEffect(() => {
+    refreshContext();
+
+    const onTenantChanged = () => {
+      void refreshContext();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener(TENANT_CONTEXT_EVENT, onTenantChanged);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener(TENANT_CONTEXT_EVENT, onTenantChanged);
+      }
+    };
   }, []);
 
-  return { context, loading };
+  return { context, loading, refreshContext };
 }
