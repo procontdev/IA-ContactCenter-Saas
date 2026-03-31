@@ -8,6 +8,22 @@ type CreateTenantResult = {
     is_primary: boolean;
 };
 
+function normalizeCreateResult(raw: unknown): CreateTenantResult | null {
+    const payload = normalizeRpcPayload(raw as CreateTenantResult[] | CreateTenantResult | null);
+    if (payload && typeof payload === 'object' && 'tenant_id' in payload) {
+        return payload as CreateTenantResult;
+    }
+
+    if (payload && typeof payload === 'object' && 'create_tenant_with_owner' in payload) {
+        const wrapped = (payload as { create_tenant_with_owner?: unknown }).create_tenant_with_owner;
+        if (wrapped && typeof wrapped === 'object' && 'tenant_id' in wrapped) {
+            return wrapped as CreateTenantResult;
+        }
+    }
+
+    return null;
+}
+
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/;
 
 function json(status: number, body: unknown) {
@@ -34,7 +50,7 @@ export async function POST(req: Request) {
             { p_name: name, p_slug: slug }
         );
 
-        const item = normalizeRpcPayload(raw);
+        const item = normalizeCreateResult(raw);
         if (!item) return json(500, { error: 'No tenant returned from RPC' });
 
         return json(200, { item });
