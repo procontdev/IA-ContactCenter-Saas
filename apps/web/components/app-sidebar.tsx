@@ -6,6 +6,7 @@ import { TenantSwitcher } from "@/components/tenant-switcher";
 
 const items = [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/tenant-settings", label: "Organización" },
     { href: "/campaigns", label: "Campañas" },
     { href: "/inbox", label: "Inbox" },
     { href: "/leads", label: "Leads" },

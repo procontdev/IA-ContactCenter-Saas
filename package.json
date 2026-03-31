@@ -13,6 +13,8 @@
         "lint": "pnpm --dir apps/web lint",
         "typecheck": "pnpm --dir apps/web exec tsc --noEmit",
         "test": "echo \"Tests pending\"",
-        "db:migrations": "echo \"Use supabase/migrations\""
+        "db:migrations": "echo \"Use supabase/migrations\"",
+        "smoke:tenant-members": "node scripts/smoke-tenant-members.js",
+        "smoke:tenant-settings": "node scripts/smoke-tenant-settings.js"
     }
 }
