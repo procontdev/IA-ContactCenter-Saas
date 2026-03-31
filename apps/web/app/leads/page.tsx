@@ -37,45 +37,13 @@ const PINNED_LEAD_IDS = [
     "15f944c0-de92-42b5-8054-5113666b6cf4",
 ] as const;
 
-const DB_SCHEMA = "demo_callcenter";
-
-function buildUrl(path: string, query?: Record<string, string>) {
-    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (!base) throw new Error("Falta NEXT_PUBLIC_SUPABASE_URL (sin /rest/v1)");
-
-    const url = new URL(path, base);
-    if (query) {
-        for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
-    }
-    return url.toString();
-}
-
-async function sbGet<T>(path: string, query?: Record<string, string>): Promise<T> {
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!anon) throw new Error("Falta NEXT_PUBLIC_SUPABASE_ANON_KEY");
-
-    const res = await fetch(buildUrl(path, query), {
-        method: "GET",
-        headers: {
-            apikey: anon,
-            Authorization: `Bearer ${anon}`,
-            "Content-Type": "application/json",
-            "Accept-Profile": DB_SCHEMA,
-        },
-        cache: "no-store",
-    });
-
-    if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`Supabase REST ${res.status}: ${text}`);
-    }
-
-    return (await res.json()) as T;
-}
+import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant";
 
 export default function LeadsPage() {
     const router = useRouter();
     const sp = useSearchParams();
+    const { context, loading: tenantLoading } = useTenant();
 
     const selectedCampaign = (sp.get("campaign") || "").trim(); // UUID
     const isFiltering = selectedCampaign.length > 0;
@@ -94,15 +62,19 @@ export default function LeadsPage() {
         router.push(qs ? `/leads?${qs}` : "/leads");
     }
 
-    // 1) Cargar campañas (1 vez)
+    // 1) Cargar campañas
     useEffect(() => {
+        if (tenantLoading) return;
         let alive = true;
         setError("");
 
-        sbGet<Campaign[]>("/rest/v1/campaigns", {
-            select: "id,code,name,is_active",
-            order: "name.asc",
-            limit: "200",
+        sbFetch<Campaign[]>("/rest/v1/campaigns", {
+            tenantId: context?.tenantId || undefined,
+            query: {
+                select: "id,code,name,is_active",
+                order: "name.asc",
+                limit: "200",
+            }
         })
             .then((data) => {
                 if (!alive) return;
@@ -116,7 +88,7 @@ export default function LeadsPage() {
         return () => {
             alive = false;
         };
-    }, []);
+    }, [tenantLoading, context?.tenantId]);
 
     const campaignNameById = useMemo(() => {
         return new Map(campaigns.map((c) => [c.id, c.name || c.code || c.id]));
@@ -127,34 +99,30 @@ export default function LeadsPage() {
         : "Todas";
 
     // 2) Cargar leads
-    //    - Sin filtro: últimos 200 globales
-    //    - Con filtro: últimos 500 de ESA campaña (campaign_id)
     useEffect(() => {
+        if (tenantLoading) return;
         let alive = true;
         setLoading(true);
         setError("");
 
         const baseSelect = "id,phone,campaign_id,campaign,estado_cliente,created_at";
 
-        const latestQuery: Record<string, string> = {
+        const latestQuery: Record<string, any> = {
             select: baseSelect,
             order: "created_at.desc",
             limit: isFiltering ? "500" : "200",
         };
 
-        // ✅ filtro correcto por columna campaign_id
         if (isFiltering) latestQuery["campaign_id"] = `eq.${selectedCampaign}`;
 
-        // ✅ OJO: pinnedQuery NO debe filtrarse por campaña.
-        // Traemos siempre los pineados y luego el sort decide si aplican.
-        const pinnedQuery: Record<string, string> = {
+        const pinnedQuery: Record<string, any> = {
             select: baseSelect,
             id: `in.(${[...PINNED_LEAD_IDS, PINNED_LEAD_ID_FIJO].join(",")})`,
         };
 
         Promise.all([
-            sbGet<Lead[]>("/rest/v1/leads", latestQuery),
-            sbGet<Lead[]>("/rest/v1/leads", pinnedQuery),
+            sbFetch<Lead[]>("/rest/v1/leads", { tenantId: context?.tenantId || undefined, query: latestQuery }),
+            sbFetch<Lead[]>("/rest/v1/leads", { tenantId: context?.tenantId || undefined, query: pinnedQuery }),
         ])
             .then(([latest, pinned]) => {
                 if (!alive) return;
@@ -165,8 +133,6 @@ export default function LeadsPage() {
 
                 const ordered = Array.from(map.values())
                     .sort((a, b) => {
-                        // ✅ Pin especial SOLO cuando se filtra por "Claro Peru Fijo"
-                        // Y solo si el lead realmente pertenece a esa campaña (campaign_id == selectedCampaign)
                         const isFijoCampaign = selectedCampaign === CLARO_PERU_FIJO_CAMPAIGN_ID;
 
                         if (isFijoCampaign) {
@@ -179,7 +145,6 @@ export default function LeadsPage() {
                             if (!aIsPinnedFijo && bIsPinnedFijo) return 1;
                         }
 
-                        // Pines globales (se mantienen)
                         const ia = PINNED_LEAD_IDS.indexOf(a.id as any);
                         const ib = PINNED_LEAD_IDS.indexOf(b.id as any);
 
@@ -190,7 +155,6 @@ export default function LeadsPage() {
                         if (aPinned) return -1;
                         if (bPinned) return 1;
 
-                        // Orden por fecha desc para el resto
                         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
                     })
                     .slice(0, 52);
@@ -210,7 +174,7 @@ export default function LeadsPage() {
         return () => {
             alive = false;
         };
-    }, [isFiltering, selectedCampaign]);
+    }, [isFiltering, selectedCampaign, tenantLoading, context?.tenantId]);
 
     return (
         <div className="p-6 space-y-4">

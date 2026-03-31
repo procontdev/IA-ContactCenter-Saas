@@ -13,7 +13,7 @@ const SLA_TARGET_SECONDS = 60; // <= 60s
 const SLA_TARGET_PCT = 85; // 85%
 const SLA_BUCKET_WITHIN_TARGET = "0-1 min"; // según tu RPC
 const DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
-const POSTGREST_PROFILE = "public"; // ✅ importante (schema/profile)
+const POSTGREST_PROFILE = "contact_center"; // ✅ Schema actualizado
 
 /**
  * =========================
@@ -193,14 +193,16 @@ export async function POST(req: Request) {
 
         const p_from_pe = String(body?.p_from_pe || "").trim();
         const p_to_pe = String(body?.p_to_pe || "").trim();
+        const p_tenant_id = body?.p_tenant_id ? String(body.p_tenant_id) : null; // ✅ Tenant ID
         const p_campaign_id = body?.p_campaign_id ? String(body.p_campaign_id) : null;
         const p_agent = body?.p_agent ? String(body.p_agent) : null;
 
-        if (!p_from_pe || !p_to_pe) {
-            return jsonErr("Missing p_from_pe / p_to_pe", 400);
+        if (!p_from_pe || !p_to_pe || !p_tenant_id) {
+            return jsonErr("Missing p_from_pe / p_to_pe / p_tenant_id", 400);
         }
 
         const agentCommon = {
+            p_tenant_id, // ✅ Pasado a la RPC
             p_from_pe,
             p_to_pe,
             p_campaign_id,

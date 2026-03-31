@@ -23,8 +23,11 @@ function trimOrEmpty(v: string) {
     return String(v ?? "").trim();
 }
 
-async function fetchCampaignByCode(code: string) {
+import { useTenant } from "@/lib/tenant/use-tenant";
+
+async function fetchCampaignByCode(code: string, tenantId?: string) {
     const rows = await sbFetch<{ id: string }[]>("/rest/v1/campaigns", {
+        tenantId,
         query: { select: "id", code: `eq.${code}`, limit: 1 },
     });
     return rows?.[0]?.id ?? null;
@@ -32,6 +35,7 @@ async function fetchCampaignByCode(code: string) {
 
 export default function NewCampaignPage() {
     const router = useRouter();
+    const { context } = useTenant();
 
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -117,6 +121,11 @@ export default function NewCampaignPage() {
     async function onCreate() {
         setError(null);
 
+        if (!context?.tenantId) {
+            setError("No se pudo determinar el contexto del tenant.");
+            return;
+        }
+
         if (!code.trim() || !name.trim()) {
             setError("Code y Name son obligatorios.");
             return;
@@ -147,6 +156,7 @@ export default function NewCampaignPage() {
         try {
             await sbFetch("/rest/v1/campaigns", {
                 method: "POST",
+                tenantId: context.tenantId, // 👈 Inyección automática de tenant_id en el body
                 body: {
                     code: code.trim(),
                     name: name.trim(),
@@ -179,7 +189,7 @@ export default function NewCampaignPage() {
                 },
             });
 
-            const id = await fetchCampaignByCode(code.trim());
+            const id = await fetchCampaignByCode(code.trim(), context.tenantId);
             if (!id) {
                 router.push("/campaigns");
                 return;

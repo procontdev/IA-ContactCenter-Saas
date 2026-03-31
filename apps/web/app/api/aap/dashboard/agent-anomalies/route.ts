@@ -41,8 +41,8 @@ async function postgrestRpc<T>(fn: string, payload: any): Promise<T> {
             apikey: serviceKey,
             Authorization: `Bearer ${serviceKey}`,
             "Content-Type": "application/json",
-            "Content-Profile": "public",
-            "Accept-Profile": "public",
+            "Content-Profile": "contact_center",
+            "Accept-Profile": "contact_center",
         },
         body: JSON.stringify(payload ?? {}),
         cache: "no-store",
@@ -77,6 +77,7 @@ type AgentKpisRow = {
 type Payload = {
     p_from_pe: string;
     p_to_pe: string;
+    p_tenant_id?: string | null; // ✅ Tenant ID
     p_campaign_id: string | null;
     p_min_calls?: number | null; // default 15
 };
@@ -154,14 +155,16 @@ export async function POST(req: Request) {
 
         const p_from_pe = String(body?.p_from_pe || "").trim();
         const p_to_pe = String(body?.p_to_pe || "").trim();
+        const p_tenant_id = body?.p_tenant_id ? String(body.p_tenant_id) : null;
         const p_campaign_id = body?.p_campaign_id ? String(body.p_campaign_id) : null;
         const p_min_calls = body?.p_min_calls != null ? Number(body.p_min_calls) : 15;
 
-        if (!p_from_pe || !p_to_pe) return jsonErr("Missing p_from_pe / p_to_pe", 400);
+        if (!p_from_pe || !p_to_pe || !p_tenant_id) return jsonErr("Missing p_from_pe / p_to_pe / p_tenant_id", 400);
 
         const { prev_from_pe, prev_to_pe } = prevRange(p_from_pe, p_to_pe);
 
         const commonCurr = {
+            p_tenant_id,
             p_from_pe,
             p_to_pe,
             p_campaign_id,
@@ -170,6 +173,7 @@ export async function POST(req: Request) {
         };
 
         const commonPrev = {
+            p_tenant_id,
             p_from_pe: prev_from_pe,
             p_to_pe: prev_to_pe,
             p_campaign_id,

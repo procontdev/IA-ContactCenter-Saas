@@ -39,8 +39,11 @@ type CampaignStatsRow = {
     intent_info?: number | null;
 };
 
-async function fetchCampaignStats(): Promise<CampaignStatsRow[]> {
+import { useTenant } from "@/lib/tenant/use-tenant";
+
+async function fetchCampaignStats(tenantId?: string): Promise<CampaignStatsRow[]> {
     return sbFetch<CampaignStatsRow[]>("/rest/v1/v_campaign_stats", {
+        tenantId, // 👈 Inyección automática de filtro
         query: {
             select:
                 "campaign_id,campaign_code,campaign_name,is_active,description,updated_at,products_total," +
@@ -79,6 +82,7 @@ function fmtDate(v?: string | null) {
 }
 
 export default function CampaignsPage() {
+    const { context, loading: tenantLoading } = useTenant();
     const [rows, setRows] = useState<CampaignStatsRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -87,12 +91,14 @@ export default function CampaignsPage() {
     const [onlyActive, setOnlyActive] = useState(false);
 
     useEffect(() => {
+        if (tenantLoading) return;
+        
         let alive = true;
         async function run() {
             setLoading(true);
             setError(null);
             try {
-                const data = await fetchCampaignStats();
+                const data = await fetchCampaignStats(context?.tenantId || undefined);
                 if (!alive) return;
                 setRows(data ?? []);
             } catch (e: any) {
@@ -107,7 +113,7 @@ export default function CampaignsPage() {
         return () => {
             alive = false;
         };
-    }, []);
+    }, [tenantLoading, context?.tenantId]);
 
     const filtered = useMemo(() => {
         const qq = q.trim().toLowerCase();

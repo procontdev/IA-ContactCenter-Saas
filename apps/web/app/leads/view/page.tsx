@@ -204,8 +204,11 @@ function isOverdue(iso: string | null | undefined) {
     return d.getTime() < Date.now();
 }
 
-async function fetchCalls(leadId: string) {
+import { useTenant } from "@/lib/tenant/use-tenant";
+
+async function fetchCalls(leadId: string, tenantId?: string) {
     return sbFetch<Call[]>("/rest/v1/calls", {
+        tenantId,
         query: {
             select:
                 "id,lead_id,mode,status,started_at,ended_at,created_at,duration_sec,phone,twilio_call_sid," +
@@ -217,10 +220,11 @@ async function fetchCalls(leadId: string) {
     });
 }
 
-async function fetchLeadWithCampaign(leadId: string) {
+async function fetchLeadWithCampaign(leadId: string, tenantId?: string) {
     // 1) Intentar view (recomendado)
     try {
         const v = await sbFetch<Lead[]>("/rest/v1/v_leads_with_campaign", {
+            tenantId,
             query: { select: "*", id: `eq.${leadId}`, limit: 1 },
         });
         if (v?.[0]) return v[0];
@@ -230,15 +234,15 @@ async function fetchLeadWithCampaign(leadId: string) {
 
     // 2) Fallback: tabla leads (sin campaign_name/objective)
     const t = await sbFetch<Lead[]>("/rest/v1/leads", {
+        tenantId,
         query: { select: "*", id: `eq.${leadId}`, limit: 1 },
     });
     return t?.[0] ?? null;
 }
 
-async function fetchWowInsight(leadId: string) {
-    // Vista WOW (score/temp/priority/sla/nba/reasons)
-    // OJO: tu PostgREST debe exponer esta vista en el schema que uses (normalmente "public" con Accept-Profile).
+async function fetchWowInsight(leadId: string, tenantId?: string) {
     const rows = await sbFetch<WowInsight[]>("/rest/v1/v_leads_wow_queue", {
+        tenantId,
         query: {
             select:
                 "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons",
@@ -252,6 +256,7 @@ async function fetchWowInsight(leadId: string) {
 function LeadViewInner() {
     const sp = useSearchParams();
     const router = useRouter();
+    const { context, loading: tenantLoading } = useTenant();
     const rawId = sp.get("id");
     const from = (sp.get("from") || "").trim().toLowerCase(); // "wow" si vienes desde WOW
 
@@ -272,9 +277,16 @@ function LeadViewInner() {
         let alive = true;
 
         async function run() {
+            if (tenantLoading) return;
             if (!id) {
                 setLoading(false);
                 setError("Falta parámetro id");
+                return;
+            }
+
+            if (!context?.tenantId) {
+                setLoading(false);
+                setError("No se pudo resolver el contexto del tenant.");
                 return;
             }
 
@@ -283,10 +295,10 @@ function LeadViewInner() {
 
             try {
                 const [leadItem, callsRes, wowRow] = await Promise.all([
-                    fetchLeadWithCampaign(id),
-                    fetchCalls(id),
+                    fetchLeadWithCampaign(id, context.tenantId),
+                    fetchCalls(id, context.tenantId),
                     // WOW es “nice to have”: si falla, no rompemos la pantalla.
-                    fetchWowInsight(id).catch(() => null),
+                    fetchWowInsight(id, context.tenantId).catch(() => null),
                 ]);
 
                 if (!alive) return;
@@ -320,13 +332,14 @@ function LeadViewInner() {
 
     async function refreshCallsWithPolling(
         leadId: string,
+        tenantId?: string,
         opts?: { maxTries?: number; delayMs?: number }
     ) {
         const maxTries = opts?.maxTries ?? 12;
         const delayMs = opts?.delayMs ?? 2000;
 
         for (let i = 0; i < maxTries; i++) {
-            const res = await fetchCalls(leadId);
+            const res = await fetchCalls(leadId, tenantId);
             const arr = res ?? [];
             setCalls(arr);
 
@@ -336,8 +349,8 @@ function LeadViewInner() {
             await new Promise((r) => setTimeout(r, delayMs));
         }
 
-        const last = (await fetchCalls(leadId))?.[0] ?? null;
-        if (last) setCalls((await fetchCalls(leadId)) ?? []);
+        const last = (await fetchCalls(leadId, tenantId))?.[0] ?? null;
+        if (last) setCalls((await fetchCalls(leadId, tenantId)) ?? []);
         return last;
     }
 
@@ -360,7 +373,8 @@ function LeadViewInner() {
                 body: JSON.stringify({
                     lead_id: lead.id,
                     phone: lead.phone,
-                    source: "demo-ui",
+                    source: "demo-crm-view",
+                    tenant_id: context?.tenantId, // 👈 Pasamos tenant_id a n8n
 
                     // contexto de campaña (opcional)
                     campaign: lead.campaign || "",
@@ -386,7 +400,7 @@ function LeadViewInner() {
                 return;
             }
 
-            const latestCall = await refreshCallsWithPolling(lead.id, { maxTries: 6, delayMs: 1500 });
+            const latestCall = await refreshCallsWithPolling(lead.id, context?.tenantId, { maxTries: 6, delayMs: 1500 });
             if (latestCall?.id) {
                 router.push(`/call?id=${encodeURIComponent(latestCall.id)}`);
                 return;

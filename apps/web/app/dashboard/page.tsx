@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DonutResultChart, CallsTrendChart } from "./DashboardCharts";
 import { sbFetch } from "@/lib/supabaseRest";
+import { useTenant } from "@/lib/tenant/use-tenant"; // ✅ Corrected path
 
 // -------------------- Types --------------------
 type CampaignOption = {
@@ -400,18 +401,20 @@ function coachFlagBadge(flag: string) {
     );
 }
 
-async function sbRpc<T>(fn: string, payload: any, opts?: { profile?: "public" | "demo_callcenter" }): Promise<T> {
-    const profile = opts?.profile;
+async function sbRpc<T>(fn: string, payload: any, opts?: { profile?: "public" | "contact_center" }): Promise<T> {
+    const profile = opts?.profile ?? "contact_center"; // ✅ Default to contact_center
     return sbFetch<T>(`/rest/v1/rpc/${fn}`, {
         method: "POST",
         body: payload,
-        headers: profile ? { "Content-Profile": profile, "Accept-Profile": profile } : undefined,
+        headers: { "Content-Profile": profile, "Accept-Profile": profile },
     });
 }
 
-async function fetchCampaignOptions(): Promise<CampaignOption[]> {
+async function fetchCampaignOptions(tenantId: string | null): Promise<CampaignOption[]> {
+    if (!tenantId) return [];
     return sbFetch<CampaignOption[]>("/rest/v1/v_campaign_stats", {
         query: {
+            tenant_id: `eq.${tenantId}`, // ✅ Tenant aware
             select: "campaign_id,campaign_name",
             order: "campaign_name.asc",
             limit: 500,
@@ -421,6 +424,9 @@ async function fetchCampaignOptions(): Promise<CampaignOption[]> {
 
 // -------------------- Page --------------------
 export default function AapDashboardPage() {
+    const { context, loading: tenantLoading } = useTenant(); // ✅ Fixed
+    const tenantId = context?.tenantId ?? null; // ✅ Tenant ID extracted
+
     const STALE_MINUTES = 10;
     const [compareEnabled, setCompareEnabled] = useState(false);
 
@@ -508,11 +514,12 @@ export default function AapDashboardPage() {
 
     // Load campaign dropdown
     useEffect(() => {
+        if (tenantLoading || !tenantId) return; // ✅ Wait for tenant
         let alive = true;
         (async () => {
             setLoadingCampaigns(true);
             try {
-                const data = await fetchCampaignOptions();
+                const data = await fetchCampaignOptions(tenantId);
                 if (!alive) return;
                 setCampaigns(data ?? []);
             } finally {
@@ -523,7 +530,7 @@ export default function AapDashboardPage() {
         return () => {
             alive = false;
         };
-    }, []);
+    }, [tenantLoading, tenantId]);
 
     // If hard filters change, reset page
     useEffect(() => {
@@ -536,7 +543,8 @@ export default function AapDashboardPage() {
         setCoachError(null);
 
         try {
-            const payload: AgentCoachPayload = {
+            const payload: AgentCoachPayload & { p_tenant_id: string | null } = {
+                p_tenant_id: tenantId,
                 p_from_pe: range.p_from_pe,
                 p_to_pe: range.p_to_pe,
                 p_campaign_id: campaignId ? campaignId : null,
@@ -572,7 +580,8 @@ export default function AapDashboardPage() {
         setAgentAnomsError(null);
 
         try {
-            const payload: AgentAnomaliesPayload = {
+            const payload: AgentAnomaliesPayload & { p_tenant_id: string | null } = {
+                p_tenant_id: tenantId,
                 p_from_pe: range.p_from_pe,
                 p_to_pe: range.p_to_pe,
                 p_campaign_id: campaignId ? campaignId : null,
@@ -772,6 +781,7 @@ export default function AapDashboardPage() {
 
             try {
                 const common = {
+                    p_tenant_id: tenantId,
                     p_from_pe: range.p_from_pe,
                     p_to_pe: range.p_to_pe,
                     p_campaign_id: campaignId ? campaignId : null,
@@ -779,6 +789,7 @@ export default function AapDashboardPage() {
                 };
 
                 const prevCommon = {
+                    p_tenant_id: tenantId,
                     p_from_pe: prevRange.prev_from_pe,
                     p_to_pe: prevRange.prev_to_pe,
                     p_campaign_id: campaignId ? campaignId : null,
@@ -804,6 +815,7 @@ export default function AapDashboardPage() {
                 const pDonut = sbRpc<DonutRow[]>("rpc_calls_donut", { ...common });
                 const pSeries = sbRpc<SeriesRow[]>("rpc_calls_timeseries", { ...common, p_grain: grain });
                 const pTopCampaigns = sbRpc<TopCampaignRow[]>("rpc_calls_top_campaigns", {
+                    p_tenant_id: tenantId,
                     p_from_pe: range.p_from_pe,
                     p_to_pe: range.p_to_pe,
                     p_campaign_id: campaignId ? campaignId : null,
@@ -934,6 +946,8 @@ export default function AapDashboardPage() {
         page,
         pageSize,
         compareEnabled,
+        tenantId,
+        tenantLoading,
     ]);
 
 
@@ -948,6 +962,7 @@ export default function AapDashboardPage() {
             // Nota: agentKpis (tabla) SIEMPRE es "todos" (p_agent: null)
             // SLA sí se filtra por agent seleccionado.
             const base = {
+                p_tenant_id: tenantId,
                 p_from_pe: range.p_from_pe,
                 p_to_pe: range.p_to_pe,
                 p_campaign_id: campaignId ? campaignId : null,
@@ -957,14 +972,13 @@ export default function AapDashboardPage() {
             try {
                 const settled = await Promise.allSettled([
                     // Esta RPC puede devolver columnas `agent/calls` o `agente/cnt` según tu SQL actual
-                    sbRpc<any[]>("rpc_calls_agent_list", base, { profile: "public" }),
+                    sbRpc<any[]>("rpc_calls_agent_list", base),
 
-                    sbRpc<AgentKpisRow[]>("rpc_calls_agent_kpis", { ...base, p_agent: null }, { profile: "public" }),
+                    sbRpc<AgentKpisRow[]>("rpc_calls_agent_kpis", { ...base, p_agent: null }),
 
                     sbRpc<SlaBucketRow[]>(
                         "rpc_calls_sla_buckets",
-                        { ...base, p_agent: agent ? agent : null },
-                        { profile: "public" }
+                        { ...base, p_agent: agent ? agent : null }
                     ),
                 ]);
 
@@ -1025,7 +1039,26 @@ export default function AapDashboardPage() {
         return () => {
             alive = false;
         };
-    }, [range.p_from_pe, range.p_to_pe, campaignId, agent, mode]);
+    }, [
+        range.p_from_pe,
+        range.p_to_pe,
+        campaignId,
+        agent,
+        mode,
+        tenantId,
+        tenantLoading
+    ]);
+
+    if (tenantLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-50 p-8 text-slate-500">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600"></div>
+                    <p className="text-lg font-medium animate-pulse">Cargando contexto de cliente...</p>
+                </div>
+            </div>
+        );
+    }
 
 
 
