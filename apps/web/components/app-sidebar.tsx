@@ -10,6 +10,8 @@ const items = [
     { href: "/campaigns", label: "Campañas" },
     { href: "/inbox", label: "Inbox" },
     { href: "/leads", label: "Leads" },
+    { href: "/leads/desk", label: "Human Desk" },
+    { href: "/leads/manager", label: "Manager View" },
     { href: "/leads/wow/", label: "Leads QA" },
     { href: "/reports", label: "Reportes" },
 ];
