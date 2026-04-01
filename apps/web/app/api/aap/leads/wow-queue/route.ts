@@ -94,7 +94,7 @@ export async function GET(req: Request) {
 
         params.set("order", "priority.asc,lead_score.desc,sla_due_at.asc,created_at.desc");
         const selectWithWorkQueue =
-            "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at";
+            "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at";
         const selectLegacy =
             "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons";
         params.set("select", selectWithWorkQueue);
@@ -102,6 +102,7 @@ export async function GET(req: Request) {
         params.set("offset", String(offset));
 
         let endpoint = `${base}?${params.toString()}`;
+        let usedLegacySelect = false;
 
         const headers = new Headers();
         headers.set("Accept-Profile", PROFILE);
@@ -119,6 +120,7 @@ export async function GET(req: Request) {
             if (missingWorkQueueColumns) {
                 params.set("select", selectLegacy);
                 endpoint = `${base}?${params.toString()}`;
+                usedLegacySelect = true;
                 res = await fetch(endpoint, { headers, cache: "no-store" });
             } else {
                 return json(res.status, { error: "PostgREST error", endpoint, details });
@@ -130,7 +132,52 @@ export async function GET(req: Request) {
             return json(res.status, { error: "PostgREST error", endpoint, details: txt });
         }
 
-        const items = await res.json();
+        const itemsRaw = await res.json();
+        let items = Array.isArray(itemsRaw) ? itemsRaw : [];
+
+        if (usedLegacySelect && items.length > 0) {
+            const ids = items
+                .map((it) => (it && typeof it === "object" ? String((it as Record<string, unknown>).id || "").trim() : ""))
+                .filter(Boolean);
+
+            if (ids.length > 0) {
+                const leadsParams = new URLSearchParams();
+                leadsParams.set(
+                    "select",
+                    "id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at,queue_start"
+                );
+                leadsParams.set("id", `in.(${ids.join(",")})`);
+                if (!tenant.isSuperAdmin) leadsParams.set("tenant_id", `eq.${tenant.tenantId}`);
+
+                const leadsEndpoint = `${SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/leads?${leadsParams.toString()}`;
+                const leadsRes = await fetch(leadsEndpoint, { headers, cache: "no-store" });
+                if (leadsRes.ok) {
+                    const leadRows = (await leadsRes.json().catch(() => [])) as Array<Record<string, unknown>>;
+                    const byId = new Map(leadRows.map((r) => [String(r.id || ""), r]));
+
+                    items = items.map((it) => {
+                        const record = it && typeof it === "object" ? (it as Record<string, unknown>) : {};
+                        const id = String(record.id || "");
+                        const lead = byId.get(id);
+                        if (!lead) return it;
+                        return {
+                            ...record,
+                            work_queue: lead.work_queue || lead.queue_start || "wow_queue_default",
+                            work_status: lead.work_status || "queued",
+                            work_assignee_user_id: lead.work_assignee_user_id || null,
+                            work_assignee_label: lead.work_assignee_label || null,
+                            work_assigned_at: lead.work_assigned_at || null,
+                            human_takeover_status: lead.human_takeover_status || 'none',
+                            human_takeover_by_user_id: lead.human_takeover_by_user_id || null,
+                            human_takeover_by_label: lead.human_takeover_by_label || null,
+                            human_takeover_at: lead.human_takeover_at || null,
+                            human_takeover_released_at: lead.human_takeover_released_at || null,
+                            human_takeover_closed_at: lead.human_takeover_closed_at || null,
+                        };
+                    });
+                }
+            }
+        }
         const total = parseTotalFromContentRange(res.headers.get("content-range"));
 
         return json(200, { items, total, limit, offset, debug: { endpoint } });

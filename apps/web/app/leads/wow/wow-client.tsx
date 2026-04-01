@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 type Temp = "" | "caliente" | "tibio" | "frio";
 type Priority = "" | "P1" | "P2" | "P3";
 type WorkStatus = "" | "queued" | "assigned" | "in_progress" | "done";
+type HumanTakeoverStatus = "none" | "taken" | "released" | "closed";
 
 type CampaignOption = {
     id: string;
@@ -39,6 +40,12 @@ type WowItem = {
     work_assignee_user_id?: string | null;
     work_assignee_label?: string | null;
     work_assigned_at?: string | null;
+    human_takeover_status?: HumanTakeoverStatus | null;
+    human_takeover_by_user_id?: string | null;
+    human_takeover_by_label?: string | null;
+    human_takeover_at?: string | null;
+    human_takeover_released_at?: string | null;
+    human_takeover_closed_at?: string | null;
 };
 
 type WowQueueResp = {
@@ -310,7 +317,7 @@ export default function LeadsWowQueueClient() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [campaignId]);
 
-    async function mutateAssignment(args: { leadId: string; operation: "assign" | "release" | "set_status"; assignee_user_id?: string; work_status?: WorkStatus; }) {
+    async function mutateAssignment(args: { leadId: string; operation: "assign" | "release" | "set_status" | "takeover_take" | "takeover_release" | "takeover_close"; assignee_user_id?: string; work_status?: WorkStatus; }) {
         if (!token) {
             alert("❌ No se detectó sesión (Bearer token). Inicia sesión para asignar leads.");
             return;
@@ -339,6 +346,12 @@ export default function LeadsWowQueueClient() {
                 work_assignee_user_id: (item.work_assignee_user_id as string | null) ?? null,
                 work_assignee_label: (item.work_assignee_label as string | null) ?? null,
                 work_assigned_at: (item.work_assigned_at as string | null) ?? null,
+                human_takeover_status: (item.human_takeover_status as WowItem["human_takeover_status"]) ?? "none",
+                human_takeover_by_user_id: (item.human_takeover_by_user_id as string | null) ?? null,
+                human_takeover_by_label: (item.human_takeover_by_label as string | null) ?? null,
+                human_takeover_at: (item.human_takeover_at as string | null) ?? null,
+                human_takeover_released_at: (item.human_takeover_released_at as string | null) ?? null,
+                human_takeover_closed_at: (item.human_takeover_closed_at as string | null) ?? null,
             } : it)));
         } catch (e: unknown) {
             alert(`❌ Error en assignment: ${e instanceof Error ? e.message : String(e)}`);
@@ -455,6 +468,9 @@ export default function LeadsWowQueueClient() {
                             const canHuman = hasPhone && shouldShowHumanCall(it);
                             const canIA = hasPhone && shouldShowIaCall(it);
                             const selectedAssignee = assigneeByLead[it.id] ?? String(it.work_assignee_user_id || "");
+                            const takeoverStatus = String(it.human_takeover_status || "none").toLowerCase();
+                            const isTaken = takeoverStatus === "taken";
+                            const isClosed = takeoverStatus === "closed";
                             return (
                                 <tr key={it.id} className="border-t">
                                     <td className="px-3 py-2"><a className="underline" href={`/leads/wow/view?id=${encodeURIComponent(it.id)}`}>{it.id.slice(0, 8)}.</a><div className="text-xs text-muted-foreground">{formatDatePe(it.created_at)}</div></td>
@@ -464,7 +480,13 @@ export default function LeadsWowQueueClient() {
                                     <td className="px-3 py-2 font-semibold">{it.lead_score ?? "-"}</td>
                                     <td className="px-3 py-2"><span className="inline-flex items-center border rounded-full px-2 py-0.5 text-xs">{it.priority || "-"}</span></td>
                                     <td className="px-3 py-2"><div>{formatDatePe(it.sla_due_at)}</div><div className={`text-xs ${isOverdue(it.sla_due_at) ? "text-red-600" : "text-muted-foreground"}`}>{isOverdue(it.sla_due_at) ? "Vencido" : "OK"}</div></td>
-                                    <td className="px-3 py-2"><div className="text-xs"><span className="inline-flex items-center border rounded-full px-2 py-0.5">{it.work_status || "queued"}</span></div><div className="text-xs text-muted-foreground mt-1">{it.work_assignee_label || it.work_assignee_user_id || "Sin owner"}</div></td>
+                                    <td className="px-3 py-2">
+                                        <div className="text-xs">
+                                            <span className="inline-flex items-center border rounded-full px-2 py-0.5">{it.work_status || "queued"}</span>
+                                            <span className="inline-flex items-center border rounded-full px-2 py-0.5 ml-1">takeover:{takeoverStatus}</span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground mt-1">{it.human_takeover_by_label || it.work_assignee_label || it.work_assignee_user_id || "Sin owner"}</div>
+                                    </td>
                                     <td className="px-3 py-2">{it.next_best_action || "-"}</td>
                                     <td className="px-3 py-2">
                                         <div className="flex flex-wrap gap-2">
@@ -480,6 +502,9 @@ export default function LeadsWowQueueClient() {
                                             <button className="border rounded-md px-2 py-1 text-xs disabled:opacity-50" disabled={rowSaving} onClick={() => mutateAssignment({ leadId: it.id, operation: "release" })}>Liberar</button>
                                             <button className="border rounded-md px-2 py-1 text-xs disabled:opacity-50" disabled={rowSaving} onClick={() => mutateAssignment({ leadId: it.id, operation: "set_status", work_status: "in_progress" })}>En curso</button>
                                             <button className="border rounded-md px-2 py-1 text-xs disabled:opacity-50" disabled={rowSaving} onClick={() => mutateAssignment({ leadId: it.id, operation: "set_status", work_status: "done" })}>Cerrar</button>
+                                            <button className="border rounded-md px-2 py-1 text-xs disabled:opacity-50" disabled={rowSaving || isTaken || isClosed} onClick={() => mutateAssignment({ leadId: it.id, operation: "takeover_take" })}>Tomar lead</button>
+                                            <button className="border rounded-md px-2 py-1 text-xs disabled:opacity-50" disabled={rowSaving || !isTaken} onClick={() => mutateAssignment({ leadId: it.id, operation: "takeover_release" })}>Soltar takeover</button>
+                                            <button className="border rounded-md px-2 py-1 text-xs disabled:opacity-50" disabled={rowSaving || isClosed} onClick={() => mutateAssignment({ leadId: it.id, operation: "takeover_close" })}>Cerrar takeover</button>
                                         </div>
                                     </td>
                                 </tr>

@@ -11,6 +11,14 @@ type LeadRow = {
     work_queue: string | null;
     work_status: string | null;
     work_assignee_user_id: string | null;
+    work_assigned_at: string | null;
+    human_takeover_status: string | null;
+    human_takeover_by_user_id: string | null;
+    human_takeover_by_label: string | null;
+    human_takeover_at: string | null;
+    human_takeover_released_at: string | null;
+    human_takeover_closed_at: string | null;
+    has_takeover_columns?: boolean;
 };
 
 type MemberRow = {
@@ -20,7 +28,7 @@ type MemberRow = {
 
 type AssignBody = {
     lead_id?: string;
-    operation?: 'assign' | 'release' | 'set_status';
+    operation?: 'assign' | 'release' | 'set_status' | 'takeover_take' | 'takeover_release' | 'takeover_close';
     assignee_user_id?: string | null;
     work_status?: 'queued' | 'assigned' | 'in_progress' | 'done';
 };
@@ -59,7 +67,7 @@ function authHeaders(token: string) {
 async function fetchLead(leadId: string, tenantId: string, token: string): Promise<LeadRow | null> {
     const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/$/, '');
     const params = new URLSearchParams({
-        select: 'id,tenant_id,queue_start,work_queue,work_status,work_assignee_user_id',
+        select: 'id,tenant_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at',
         id: `eq.${leadId}`,
         tenant_id: `eq.${tenantId}`,
         limit: '1',
@@ -71,13 +79,71 @@ async function fetchLead(leadId: string, tenantId: string, token: string): Promi
         cache: 'no-store',
     });
 
-    if (!res.ok) {
-        const details = await res.text().catch(() => '');
+    if (res.ok) {
+        const rows = (await res.json().catch(() => [])) as LeadRow[];
+        const row = rows?.[0] ?? null;
+        if (!row) return null;
+        return { ...row, has_takeover_columns: true };
+    }
+
+    const details = await res.text().catch(() => '');
+    const missingTakeoverCols = details.includes('human_takeover_status') && details.includes('does not exist');
+    if (!missingTakeoverCols) {
         throw new Error(`PostgREST GET leads failed (${res.status}): ${details}`);
     }
 
-    const rows = (await res.json().catch(() => [])) as LeadRow[];
-    return rows?.[0] ?? null;
+    const legacyParams = new URLSearchParams({
+        select: 'id,tenant_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at',
+        id: `eq.${leadId}`,
+        tenant_id: `eq.${tenantId}`,
+        limit: '1',
+    });
+
+    const legacyRes = await fetch(`${baseUrl}/rest/v1/leads?${legacyParams.toString()}`, {
+        method: 'GET',
+        headers: authHeaders(token),
+        cache: 'no-store',
+    });
+    if (!legacyRes.ok) {
+        const legacyDetails = await legacyRes.text().catch(() => '');
+        throw new Error(`PostgREST GET leads legacy failed (${legacyRes.status}): ${legacyDetails}`);
+    }
+
+    const legacyRows = (await legacyRes.json().catch(() => [])) as LeadRow[];
+    const legacy = legacyRows?.[0] ?? null;
+    if (!legacy) return null;
+    return {
+        ...legacy,
+        human_takeover_status: null,
+        human_takeover_by_user_id: null,
+        human_takeover_by_label: null,
+        human_takeover_at: null,
+        human_takeover_released_at: null,
+        human_takeover_closed_at: null,
+        has_takeover_columns: false,
+    };
+}
+
+type ActorInfo = {
+    userId: string;
+    email: string | null;
+};
+
+async function fetchActor(token: string): Promise<ActorInfo | null> {
+    const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/$/, '');
+    const res = await fetch(`${baseUrl}/auth/v1/user`, {
+        method: 'GET',
+        headers: authHeaders(token),
+        cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const user = (await res.json().catch(() => null)) as { id?: string; email?: string | null } | null;
+    const id = String(user?.id || '').trim();
+    if (!UUID_RE.test(id)) return null;
+    return {
+        userId: id,
+        email: typeof user?.email === 'string' ? user.email : null,
+    };
 }
 
 export async function POST(req: Request) {
@@ -88,16 +154,20 @@ export async function POST(req: Request) {
         const tenant = await resolveTenantFromRequest(req, { fallbackEnabled: false });
         const role = normalizeRole(tenant.role);
         if (!tenant?.tenantId || !role) return json(403, { error: 'No active tenant context' });
-        if (!canPerform(role, 'leads', 'update')) return json(403, { error: 'Forbidden: leads update required' });
 
         const body = (await req.json().catch(() => ({}))) as AssignBody;
         const leadId = String(body?.lead_id || '').trim();
         const operation = String(body?.operation || '').trim().toLowerCase();
         const requestedStatus = String(body?.work_status || '').trim().toLowerCase();
+        const isTakeoverOp = ['takeover_take', 'takeover_release', 'takeover_close'].includes(operation);
+
+        if (!isTakeoverOp && !canPerform(role, 'leads', 'update')) {
+            return json(403, { error: 'Forbidden: leads update required' });
+        }
 
         if (!UUID_RE.test(leadId)) return json(400, { error: 'lead_id must be a valid UUID' });
-        if (!['assign', 'release', 'set_status'].includes(operation)) {
-            return json(400, { error: 'operation inválida. Usa assign, release o set_status' });
+        if (!['assign', 'release', 'set_status', 'takeover_take', 'takeover_release', 'takeover_close'].includes(operation)) {
+            return json(400, { error: 'operation inválida. Usa assign, release, set_status, takeover_take, takeover_release o takeover_close' });
         }
 
         const current = await fetchLead(leadId, tenant.tenantId, token);
@@ -151,11 +221,61 @@ export async function POST(req: Request) {
             }
         }
 
+        if (operation === 'takeover_take') {
+            if (current.has_takeover_columns === false) {
+                return json(409, { error: 'human takeover columns are missing. Apply migration 0022 first.' });
+            }
+            const actor = await fetchActor(token);
+            if (!actor) return json(401, { error: 'No se pudo resolver usuario actor para takeover' });
+
+            patchBody.human_takeover_status = 'taken';
+            patchBody.human_takeover_by_user_id = actor.userId;
+            patchBody.human_takeover_by_label = actor.email || actor.userId;
+            patchBody.human_takeover_at = nowIso;
+            patchBody.human_takeover_released_at = null;
+            patchBody.human_takeover_closed_at = null;
+
+            patchBody.work_assignee_user_id = actor.userId;
+            patchBody.work_assignee_label = actor.email || actor.userId;
+            patchBody.work_assigned_at = current.work_assigned_at || nowIso;
+            patchBody.work_status = 'in_progress';
+        }
+
+        if (operation === 'takeover_release') {
+            if (current.has_takeover_columns === false) {
+                return json(409, { error: 'human takeover columns are missing. Apply migration 0022 first.' });
+            }
+            patchBody.human_takeover_status = 'released';
+            patchBody.human_takeover_released_at = nowIso;
+            patchBody.work_assignee_user_id = null;
+            patchBody.work_assignee_label = null;
+            patchBody.work_assigned_at = null;
+            patchBody.work_status = 'queued';
+        }
+
+        if (operation === 'takeover_close') {
+            if (current.has_takeover_columns === false) {
+                return json(409, { error: 'human takeover columns are missing. Apply migration 0022 first.' });
+            }
+            if (!current.human_takeover_by_user_id || !current.human_takeover_at) {
+                const actor = await fetchActor(token);
+                if (!actor) return json(401, { error: 'No se pudo resolver usuario actor para takeover_close' });
+                patchBody.human_takeover_by_user_id = actor.userId;
+                patchBody.human_takeover_by_label = actor.email || actor.userId;
+                patchBody.human_takeover_at = nowIso;
+            }
+            patchBody.human_takeover_status = 'closed';
+            patchBody.human_takeover_closed_at = nowIso;
+            patchBody.work_status = 'done';
+        }
+
         const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/$/, '');
         const params = new URLSearchParams({
             id: `eq.${leadId}`,
             tenant_id: `eq.${tenant.tenantId}`,
-            select: 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,updated_at',
+            select: current.has_takeover_columns === false
+                ? 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,updated_at'
+                : 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at,updated_at',
             limit: '1',
         });
 
