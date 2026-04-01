@@ -71,6 +71,16 @@ type WowInsight = {
     lead_score_reasons: string[];
 };
 
+type TimelineItem = {
+    id: string;
+    event_type: string;
+    event_at: string;
+    actor_label: string | null;
+    source: string;
+    payload: Record<string, unknown> | null;
+    derived?: boolean;
+};
+
 const WOW_NAV_KEY = "wow_queue_nav_v1";
 
 function safeJsonParse<T>(s: string | null): T | null {
@@ -117,6 +127,24 @@ function isOverdue(iso: string | null | undefined) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return false;
     return d.getTime() < Date.now();
+}
+
+function readAccessTokenFromStorage() {
+    if (typeof window === "undefined") return null;
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+        const key = window.localStorage.key(i) || "";
+        if (!key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+            const parsed = JSON.parse(raw);
+            const access = parsed?.access_token || parsed?.currentSession?.access_token || null;
+            if (access) return String(access);
+        } catch {
+            // no-op
+        }
+    }
+    return null;
 }
 
 function getTurnsCount(call: Call) {
@@ -260,6 +288,19 @@ async function fetchWowInsight(leadId: string, tenantId?: string) {
     }
 }
 
+async function fetchLeadTimeline(leadId: string, token: string) {
+    const res = await fetch(`/api/aap/leads/${encodeURIComponent(leadId)}/timeline?limit=80`, {
+        method: "GET",
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(String(body?.error || `Timeline error ${res.status}`));
+    }
+    return Array.isArray(body?.items) ? (body.items as TimelineItem[]) : [];
+}
+
 function LeadWowViewInner() {
     const sp = useSearchParams();
     const router = useRouter();
@@ -278,6 +319,14 @@ function LeadWowViewInner() {
     const [loading, setLoading] = useState(true);
     const [calling, setCalling] = useState<null | "human" | "llm">(null);
     const [error, setError] = useState<string | null>(null);
+    const [token, setToken] = useState<string | null>(null);
+    const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+    const [timelineLoading, setTimelineLoading] = useState(false);
+    const [timelineError, setTimelineError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setToken(readAccessTokenFromStorage());
+    }, []);
 
     // ✅ Navegación Anterior/Siguiente (desde WOW Queue)
     const [nav, setNav] = useState<{ ids: string[]; currentId?: string | null } | null>(null);
@@ -354,6 +403,38 @@ function LeadWowViewInner() {
             alive = false;
         };
     }, [id, tenantLoading, tenantId]);
+
+    useEffect(() => {
+        let alive = true;
+
+        async function runTimeline() {
+            if (!id || !token) {
+                setTimeline([]);
+                if (!token) setTimelineError("No se detectó sesión para cargar timeline.");
+                return;
+            }
+
+            setTimelineLoading(true);
+            setTimelineError(null);
+            try {
+                const items = await fetchLeadTimeline(id, token);
+                if (!alive) return;
+                setTimeline(items);
+            } catch (e: any) {
+                if (!alive) return;
+                setTimeline([]);
+                setTimelineError(e?.message ?? String(e));
+            } finally {
+                if (!alive) return;
+                setTimelineLoading(false);
+            }
+        }
+
+        runTimeline();
+        return () => {
+            alive = false;
+        };
+    }, [id, token]);
 
     const N8N_BASE =
         process.env.NEXT_PUBLIC_N8N_BASE_URL || "https://elastica-n8n.3haody.easypanel.host";
@@ -638,6 +719,33 @@ function LeadWowViewInner() {
                                 Fuente: demo_callcenter.calls (best call) + metadata.llm / metadata.assistant
                             </div>
                         </>
+                    )}
+                </div>
+
+                <div className="rounded-xl border p-4 space-y-2 md:col-span-2">
+                    <div className="font-medium">Actividad del lead (timeline MVP)</div>
+
+                    {timelineLoading ? (
+                        <div className="text-sm text-muted-foreground">Cargando timeline…</div>
+                    ) : timelineError ? (
+                        <div className="text-sm text-red-600">{timelineError}</div>
+                    ) : !timeline.length ? (
+                        <div className="text-sm text-muted-foreground">Sin eventos para este lead.</div>
+                    ) : (
+                        <div className="space-y-2">
+                            {timeline.map((ev) => (
+                                <div key={ev.id} className="rounded-md border p-2">
+                                    <div className="text-sm font-medium">{ev.event_type}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {formatDatePe(ev.event_at)} · {ev.actor_label || "system"} · {ev.source}
+                                        {ev.derived ? " · derived" : ""}
+                                    </div>
+                                    <pre className="mt-1 text-xs overflow-x-auto whitespace-pre-wrap">
+                                        {JSON.stringify(ev.payload || {}, null, 2)}
+                                    </pre>
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </div>
 

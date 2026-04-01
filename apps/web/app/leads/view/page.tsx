@@ -78,6 +78,16 @@ type WowInsight = {
     lead_score_reasons: string[] | null;
 };
 
+type TimelineItem = {
+    id: string;
+    event_type: string;
+    event_at: string;
+    actor_label: string | null;
+    source: string;
+    payload: Record<string, unknown> | null;
+    derived?: boolean;
+};
+
 function fmtSec(s: number | null) {
     if (s === null || s === undefined) return "-";
     const m = Math.floor(s / 60);
@@ -204,6 +214,24 @@ function isOverdue(iso: string | null | undefined) {
     return d.getTime() < Date.now();
 }
 
+function readAccessTokenFromStorage() {
+    if (typeof window === "undefined") return null;
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+        const key = window.localStorage.key(i) || "";
+        if (!key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+            const parsed = JSON.parse(raw);
+            const access = parsed?.access_token || parsed?.currentSession?.access_token || null;
+            if (access) return String(access);
+        } catch {
+            // no-op
+        }
+    }
+    return null;
+}
+
 import { useTenant } from "@/lib/tenant/use-tenant";
 
 async function fetchCalls(leadId: string, tenantId?: string) {
@@ -253,6 +281,19 @@ async function fetchWowInsight(leadId: string, tenantId?: string) {
     return rows?.[0] ?? null;
 }
 
+async function fetchLeadTimeline(leadId: string, token: string) {
+    const res = await fetch(`/api/aap/leads/${encodeURIComponent(leadId)}/timeline?limit=80`, {
+        method: "GET",
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(String(body?.error || `Timeline error ${res.status}`));
+    }
+    return Array.isArray(body?.items) ? (body.items as TimelineItem[]) : [];
+}
+
 function LeadViewInner() {
     const sp = useSearchParams();
     const router = useRouter();
@@ -272,6 +313,14 @@ function LeadViewInner() {
     const [loading, setLoading] = useState(true);
     const [calling, setCalling] = useState<null | "human" | "llm">(null);
     const [error, setError] = useState<string | null>(null);
+    const [token, setToken] = useState<string | null>(null);
+    const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+    const [timelineLoading, setTimelineLoading] = useState(false);
+    const [timelineError, setTimelineError] = useState<string | null>(null);
+
+    useEffect(() => {
+        setToken(readAccessTokenFromStorage());
+    }, []);
 
     useEffect(() => {
         let alive = true;
@@ -319,6 +368,38 @@ function LeadViewInner() {
             alive = false;
         };
     }, [id]);
+
+    useEffect(() => {
+        let alive = true;
+
+        async function runTimeline() {
+            if (!id || !token) {
+                setTimeline([]);
+                if (!token) setTimelineError("No se detectó sesión para cargar timeline.");
+                return;
+            }
+
+            setTimelineLoading(true);
+            setTimelineError(null);
+            try {
+                const items = await fetchLeadTimeline(id, token);
+                if (!alive) return;
+                setTimeline(items);
+            } catch (e: any) {
+                if (!alive) return;
+                setTimeline([]);
+                setTimelineError(e?.message ?? String(e));
+            } finally {
+                if (!alive) return;
+                setTimelineLoading(false);
+            }
+        }
+
+        runTimeline();
+        return () => {
+            alive = false;
+        };
+    }, [id, token]);
 
     const N8N_BASE =
         process.env.NEXT_PUBLIC_N8N_BASE_URL || "https://elastica-n8n.3haody.easypanel.host";
@@ -400,7 +481,7 @@ function LeadViewInner() {
                 return;
             }
 
-            const latestCall = await refreshCallsWithPolling(lead.id, context?.tenantId, { maxTries: 6, delayMs: 1500 });
+            const latestCall = await refreshCallsWithPolling(lead.id, context?.tenantId || undefined, { maxTries: 6, delayMs: 1500 });
             if (latestCall?.id) {
                 router.push(`/call?id=${encodeURIComponent(latestCall.id)}`);
                 return;
@@ -616,6 +697,33 @@ function LeadViewInner() {
                         <Link className="underline text-sm" href={`/call?id=${encodeURIComponent(calls[0].id)}`}>
                             Ver última llamada →
                         </Link>
+                    )}
+                </div>
+
+                <div className="rounded-xl border p-4 space-y-2 md:col-span-2">
+                    <div className="font-medium">Actividad del lead (timeline MVP)</div>
+
+                    {timelineLoading ? (
+                        <div className="text-sm text-muted-foreground">Cargando timeline…</div>
+                    ) : timelineError ? (
+                        <div className="text-sm text-red-600">{timelineError}</div>
+                    ) : !timeline.length ? (
+                        <div className="text-sm text-muted-foreground">Sin eventos para este lead.</div>
+                    ) : (
+                        <div className="space-y-2">
+                            {timeline.map((ev) => (
+                                <div key={ev.id} className="rounded-md border p-2">
+                                    <div className="text-sm font-medium">{ev.event_type}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {formatDatePe(ev.event_at)} · {ev.actor_label || "system"} · {ev.source}
+                                        {ev.derived ? " · derived" : ""}
+                                    </div>
+                                    <pre className="mt-1 text-xs overflow-x-auto whitespace-pre-wrap">
+                                        {JSON.stringify(ev.payload || {}, null, 2)}
+                                    </pre>
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </div>
 

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { canPerform } from '@/lib/permissions/access-control';
 import { mergeLeadFields, pickDedupMatchKind, type DedupMatchKind } from '@/lib/leads/dedup-policy';
 import { buildIntakeRaw, normalizeLeadIntake } from '@/lib/leads/intake-normalizer';
+import { buildLeadQualificationRouting } from '@/lib/leads/qualification-routing';
+import { insertLeadActivityEvents } from '@/lib/leads/activity-events';
 import { resolveTenantFromRequest } from '@/lib/tenant/tenant-request';
 import { extractBearerToken } from '@/lib/tenant/tenant-rpc-server';
 import type { UserRole } from '@/lib/tenant/tenant-types';
@@ -44,6 +46,8 @@ type CampaignRow = {
     id: string;
     code: string;
     tenant_id: string;
+    ops_settings?: Record<string, unknown> | null;
+    llm_policy?: Record<string, unknown> | null;
 };
 
 type ExistingLeadRow = {
@@ -56,6 +60,16 @@ type ExistingLeadRow = {
     phone_norm: string | null;
     email: string | null;
     email_norm: string | null;
+    queue_start: string | null;
+    estado_usuario: string | null;
+    lead_score: number | null;
+    lead_temperature: 'caliente' | 'tibio' | 'frio' | null;
+    priority: 'P1' | 'P2' | 'P3' | null;
+    sla_due_at: string | null;
+    next_best_action: string | null;
+    quality_flags: unknown;
+    spam_flags: unknown;
+    lead_score_reasons: unknown;
     raw: unknown;
 };
 
@@ -100,9 +114,14 @@ function toArray(body: unknown): IntakeItem[] {
     return [];
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return value as Record<string, unknown>;
+}
+
 async function fetchCampaignById(baseUrl: string, token: string, tenantId: string, campaignId: string): Promise<CampaignRow | null> {
     const params = new URLSearchParams();
-    params.set('select', 'id,code,tenant_id');
+    params.set('select', 'id,code,tenant_id,ops_settings,llm_policy');
     params.set('id', `eq.${campaignId}`);
     params.set('tenant_id', `eq.${tenantId}`);
     params.set('limit', '1');
@@ -120,7 +139,7 @@ async function fetchCampaignById(baseUrl: string, token: string, tenantId: strin
 
 async function fetchCampaignByCode(baseUrl: string, token: string, tenantId: string, code: string): Promise<CampaignRow | null> {
     const params = new URLSearchParams();
-    params.set('select', 'id,code,tenant_id');
+    params.set('select', 'id,code,tenant_id,ops_settings,llm_policy');
     params.set('code', `eq.${code}`);
     params.set('tenant_id', `eq.${tenantId}`);
     params.set('limit', '1');
@@ -148,8 +167,8 @@ async function fetchExistingLeadByKey(
 
     const requestByKind = async (kind: DedupMatchKind, includeEmailColumns: boolean) => {
         const select = includeEmailColumns
-            ? 'id,tenant_id,campaign_id,source_id,form_id,phone,phone_norm,email,email_norm,raw'
-            : 'id,tenant_id,campaign_id,source_id,form_id,phone,phone_norm,raw';
+            ? 'id,tenant_id,campaign_id,source_id,form_id,phone,phone_norm,email,email_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,raw'
+            : 'id,tenant_id,campaign_id,source_id,form_id,phone,phone_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,raw';
 
         const params = new URLSearchParams();
         params.set('select', select);
@@ -302,9 +321,40 @@ export async function POST(req: Request) {
                 dedup_at: nowIso,
             };
 
+            const qualification = buildLeadQualificationRouting({
+                normalized,
+                campaignCode: campaign.code,
+                opsSettings: campaign.ops_settings,
+                llmPolicy: campaign.llm_policy,
+                signals: {
+                    queue_start: item.queue_start ?? null,
+                    estado_cliente: item.estado_cliente ?? null,
+                    estado_usuario: item.estado_usuario ?? null,
+                    metadata: item.metadata,
+                },
+            });
+
+            const qualificationMeta = {
+                version: 'lead-qualification-routing-mvp-v1',
+                computed_at: nowIso,
+                handoff_required: qualification.handoff_required,
+                route_queue: qualification.queue_start,
+                estado_inicial: qualification.estado_usuario,
+                score: qualification.lead_score,
+                temperature: qualification.lead_temperature,
+                priority: qualification.priority,
+                reasons: qualification.lead_score_reasons,
+            };
+
             const intakeRawWithDedup = {
                 ...intakeRaw,
                 dedup: dedupMeta,
+                qualification: qualificationMeta,
+                routing: {
+                    queue_start: qualification.queue_start,
+                    next_best_action: qualification.next_best_action,
+                    sla_due_at: qualification.sla_due_at,
+                },
             };
 
             const basePayload = {
@@ -317,10 +367,10 @@ export async function POST(req: Request) {
                 phone_norm: normalized.phone_norm,
                 channel: normalized.channel,
                 fecha: item.fecha || null,
-                queue_start: item.queue_start ?? null,
+                queue_start: qualification.queue_start,
                 queue_end: item.queue_end ?? null,
                 estado_cliente: item.estado_cliente ?? null,
-                estado_usuario: item.estado_usuario ?? null,
+                estado_usuario: qualification.estado_usuario,
                 usuario: item.usuario ?? null,
                 extension: item.extension ?? null,
                 duracion_sec: typeof item.duracion_sec === 'number' ? item.duracion_sec : 0,
@@ -328,6 +378,14 @@ export async function POST(req: Request) {
                 call_state: item.call_state ?? null,
                 sale_state_general: item.sale_state_general ?? null,
                 sale_state: item.sale_state ?? null,
+                lead_score: qualification.lead_score,
+                lead_temperature: qualification.lead_temperature,
+                priority: qualification.priority,
+                sla_due_at: qualification.sla_due_at,
+                next_best_action: qualification.next_best_action,
+                quality_flags: qualification.quality_flags,
+                spam_flags: qualification.spam_flags,
+                lead_score_reasons: qualification.lead_score_reasons,
                 depto: item.depto ?? null,
                 provincia: item.provincia ?? null,
                 distrito: item.distrito ?? null,
@@ -369,6 +427,18 @@ export async function POST(req: Request) {
                     form_id: merged.form_id,
                     phone: merged.phone,
                     phone_norm: merged.phone_norm,
+                    queue_start: existing.row.queue_start ?? qualification.queue_start,
+                    estado_usuario: existing.row.estado_usuario ?? qualification.estado_usuario,
+                    lead_score: existing.row.lead_score ?? qualification.lead_score,
+                    lead_temperature: existing.row.lead_temperature ?? qualification.lead_temperature,
+                    priority: existing.row.priority ?? qualification.priority,
+                    sla_due_at: existing.row.sla_due_at ?? qualification.sla_due_at,
+                    next_best_action: existing.row.next_best_action ?? qualification.next_best_action,
+                    quality_flags: Array.isArray(existing.row.quality_flags) ? existing.row.quality_flags : qualification.quality_flags,
+                    spam_flags: Array.isArray(existing.row.spam_flags) ? existing.row.spam_flags : qualification.spam_flags,
+                    lead_score_reasons: Array.isArray(existing.row.lead_score_reasons)
+                        ? existing.row.lead_score_reasons
+                        : qualification.lead_score_reasons,
                     ...(emailColumnsSupported ? { email: merged.email, email_norm: merged.email_norm } : {}),
                     raw: merged.raw,
                 });
@@ -378,8 +448,8 @@ export async function POST(req: Request) {
         }
 
         const select = emailColumnsSupported
-            ? 'id,tenant_id,campaign_id,campaign,source_id,form_id,channel,phone,phone_norm,email,email_norm,created_at,updated_at,raw'
-            : 'id,tenant_id,campaign_id,campaign,source_id,form_id,channel,phone,phone_norm,created_at,updated_at,raw';
+            ? 'id,tenant_id,campaign_id,campaign,source_id,form_id,channel,phone,phone_norm,email,email_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,created_at,updated_at,raw'
+            : 'id,tenant_id,campaign_id,campaign,source_id,form_id,channel,phone,phone_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,created_at,updated_at,raw';
         const saved: Array<Record<string, unknown>> = [];
 
         if (rowsToMergeById.length) {
@@ -430,6 +500,66 @@ export async function POST(req: Request) {
             saved.push(...insertedRows);
         }
 
+        try {
+            const tenantId = String(tenant.tenantId || '').trim();
+            if (!tenantId) throw new Error('Missing tenant_id for lead activity');
+
+            const events = saved.flatMap((row) => {
+                const leadId = String(row.id || '').trim();
+                if (!leadId) return [];
+
+                const raw = asRecord(row.raw);
+                const dedup = asRecord(raw.dedup);
+                const qualification = asRecord(raw.qualification);
+                const routing = asRecord(raw.routing);
+                const matchedLeadId = String(dedup.matched_lead_id || '').trim();
+                const intakeEventType = matchedLeadId ? 'lead.intake.merged' : 'lead.intake.created';
+                const now = new Date().toISOString();
+
+                const campaignIdRaw = row.campaign_id;
+                const campaignId = typeof campaignIdRaw === 'string' && campaignIdRaw.trim() ? campaignIdRaw : null;
+
+                return [
+                    {
+                        tenantId,
+                        leadId,
+                        campaignId,
+                        eventType: intakeEventType,
+                        eventAt: now,
+                        source: 'api.leads.intake',
+                        payload: {
+                            source_id: row.source_id ?? null,
+                            channel: row.channel ?? null,
+                            dedup: {
+                                policy: dedup.policy ?? null,
+                                matched_by: dedup.matched_by ?? null,
+                                matched_lead_id: dedup.matched_lead_id ?? null,
+                            },
+                        },
+                    },
+                    {
+                        tenantId,
+                        leadId,
+                        campaignId,
+                        eventType: 'lead.qualification.routed',
+                        eventAt: now,
+                        source: 'api.leads.intake',
+                        payload: {
+                            score: qualification.score ?? row.lead_score ?? null,
+                            temperature: qualification.temperature ?? row.lead_temperature ?? null,
+                            priority: qualification.priority ?? row.priority ?? null,
+                            route_queue: qualification.route_queue ?? routing.queue_start ?? row.queue_start ?? null,
+                            next_best_action: routing.next_best_action ?? row.next_best_action ?? null,
+                        },
+                    },
+                ];
+            });
+
+            await insertLeadActivityEvents({ baseUrl, token, events });
+        } catch {
+            // MVP: no interrumpir intake por fallo de auditoría
+        }
+
         return json(201, {
             ok: true,
             items: saved,
@@ -439,6 +569,7 @@ export async function POST(req: Request) {
                 merged: rowsToMergeById.length,
                 inserted: rowsToInsert.length,
                 mapper: 'lead-intake-dedup-mvp-v1',
+                qualification_routing: 'lead-qualification-routing-mvp-v1',
             },
         });
     } catch (e: unknown) {

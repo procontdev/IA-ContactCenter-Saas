@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { canPerform } from '@/lib/permissions/access-control';
+import { insertLeadActivityEvents } from '@/lib/leads/activity-events';
 import { resolveTenantFromRequest } from '@/lib/tenant/tenant-request';
 import { callPlatformCoreRpc, extractBearerToken } from '@/lib/tenant/tenant-rpc-server';
 import type { UserRole } from '@/lib/tenant/tenant-types';
@@ -7,6 +8,7 @@ import type { UserRole } from '@/lib/tenant/tenant-types';
 type LeadRow = {
     id: string;
     tenant_id: string;
+    campaign_id: string | null;
     queue_start: string | null;
     work_queue: string | null;
     work_status: string | null;
@@ -67,7 +69,7 @@ function authHeaders(token: string) {
 async function fetchLead(leadId: string, tenantId: string, token: string): Promise<LeadRow | null> {
     const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/$/, '');
     const params = new URLSearchParams({
-        select: 'id,tenant_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at',
+        select: 'id,tenant_id,campaign_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at',
         id: `eq.${leadId}`,
         tenant_id: `eq.${tenantId}`,
         limit: '1',
@@ -93,7 +95,7 @@ async function fetchLead(leadId: string, tenantId: string, token: string): Promi
     }
 
     const legacyParams = new URLSearchParams({
-        select: 'id,tenant_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at',
+        select: 'id,tenant_id,campaign_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at',
         id: `eq.${leadId}`,
         tenant_id: `eq.${tenantId}`,
         limit: '1',
@@ -297,6 +299,52 @@ export async function POST(req: Request) {
         const rows = (await res.json().catch(() => [])) as Array<Record<string, unknown>>;
         const item = rows?.[0] ?? null;
         if (!item) return json(500, { error: 'No row returned after update' });
+
+        try {
+            const actor = await fetchActor(token).catch(() => null);
+            const eventTypeByOperation: Record<string, string> = {
+                assign: 'lead.assignment.assigned',
+                release: 'lead.assignment.released',
+                set_status: 'lead.work.status_changed',
+                takeover_take: 'lead.takeover.taken',
+                takeover_release: 'lead.takeover.released',
+                takeover_close: 'lead.takeover.closed',
+            };
+
+            const eventType = eventTypeByOperation[operation] || 'lead.work.updated';
+            await insertLeadActivityEvents({
+                baseUrl,
+                token,
+                events: [
+                    {
+                        tenantId: tenant.tenantId,
+                        leadId,
+                        campaignId: current.campaign_id || null,
+                        eventType,
+                        source: 'api.aap.leads.work-queue.assign',
+                        actorUserId: actor?.userId || null,
+                        actorLabel: actor?.email || actor?.userId || null,
+                        payload: {
+                            operation,
+                            previous: {
+                                work_status: current.work_status,
+                                work_assignee_user_id: current.work_assignee_user_id,
+                                human_takeover_status: current.human_takeover_status,
+                                human_takeover_by_user_id: current.human_takeover_by_user_id,
+                            },
+                            next: {
+                                work_status: item.work_status ?? null,
+                                work_assignee_user_id: item.work_assignee_user_id ?? null,
+                                human_takeover_status: item.human_takeover_status ?? null,
+                                human_takeover_by_user_id: item.human_takeover_by_user_id ?? null,
+                            },
+                        },
+                    },
+                ],
+            });
+        } catch {
+            // MVP: no bloquear flujo operativo por fallo de auditoría
+        }
 
         return json(200, { item });
     } catch (e: unknown) {
