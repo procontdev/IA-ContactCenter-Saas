@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { canPerform } from '@/lib/permissions/access-control';
 import { insertLeadActivityEvents } from '@/lib/leads/activity-events';
+import { evaluateLeadSlaPolicy } from '@/lib/leads/sla-escalation';
 import { resolveTenantFromRequest } from '@/lib/tenant/tenant-request';
 import { callPlatformCoreRpc, extractBearerToken } from '@/lib/tenant/tenant-rpc-server';
 import type { UserRole } from '@/lib/tenant/tenant-types';
@@ -14,6 +15,14 @@ type LeadRow = {
     work_status: string | null;
     work_assignee_user_id: string | null;
     work_assigned_at: string | null;
+    priority: 'P1' | 'P2' | 'P3' | null;
+    sla_due_at: string | null;
+    next_best_action: string | null;
+    sla_status: 'no_sla' | 'on_time' | 'due_soon' | 'overdue' | null;
+    sla_is_escalated: boolean | null;
+    sla_escalation_level: 'none' | 'warning' | 'critical' | null;
+    sla_escalated_at: string | null;
+    sla_last_evaluated_at: string | null;
     human_takeover_status: string | null;
     human_takeover_by_user_id: string | null;
     human_takeover_by_label: string | null;
@@ -69,7 +78,7 @@ function authHeaders(token: string) {
 async function fetchLead(leadId: string, tenantId: string, token: string): Promise<LeadRow | null> {
     const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/$/, '');
     const params = new URLSearchParams({
-        select: 'id,tenant_id,campaign_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at',
+        select: 'id,tenant_id,campaign_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at,priority,sla_due_at,next_best_action,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at',
         id: `eq.${leadId}`,
         tenant_id: `eq.${tenantId}`,
         limit: '1',
@@ -95,7 +104,7 @@ async function fetchLead(leadId: string, tenantId: string, token: string): Promi
     }
 
     const legacyParams = new URLSearchParams({
-        select: 'id,tenant_id,campaign_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at',
+        select: 'id,tenant_id,campaign_id,queue_start,work_queue,work_status,work_assignee_user_id,work_assigned_at,priority,sla_due_at,next_best_action,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at',
         id: `eq.${leadId}`,
         tenant_id: `eq.${tenantId}`,
         limit: '1',
@@ -122,6 +131,11 @@ async function fetchLead(leadId: string, tenantId: string, token: string): Promi
         human_takeover_at: null,
         human_takeover_released_at: null,
         human_takeover_closed_at: null,
+        sla_status: legacy.sla_status ?? null,
+        sla_is_escalated: legacy.sla_is_escalated ?? false,
+        sla_escalation_level: legacy.sla_escalation_level ?? 'none',
+        sla_escalated_at: legacy.sla_escalated_at ?? null,
+        sla_last_evaluated_at: legacy.sla_last_evaluated_at ?? null,
         has_takeover_columns: false,
     };
 }
@@ -271,13 +285,38 @@ export async function POST(req: Request) {
             patchBody.work_status = 'done';
         }
 
+        const targetWorkStatus = String(patchBody.work_status || current.work_status || 'queued').toLowerCase();
+        const targetTakeoverStatus = String(patchBody.human_takeover_status || current.human_takeover_status || 'none').toLowerCase();
+        const targetPriority = String(patchBody.priority || current.priority || '').toUpperCase();
+        const slaEval = evaluateLeadSlaPolicy({
+            sla_due_at: current.sla_due_at,
+            priority: targetPriority,
+            work_status: targetWorkStatus,
+            human_takeover_status: targetTakeoverStatus,
+        });
+
+        patchBody.sla_status = slaEval.sla_status;
+        patchBody.sla_is_escalated = slaEval.sla_is_escalated;
+        patchBody.sla_escalation_level = slaEval.sla_escalation_level;
+        patchBody.sla_last_evaluated_at = nowIso;
+        if (slaEval.sla_is_escalated) {
+            patchBody.sla_escalated_at = current.sla_escalated_at || nowIso;
+        }
+
+        if (slaEval.should_raise_priority) {
+            patchBody.priority = 'P1';
+            if (!String(current.next_best_action || '').trim()) {
+                patchBody.next_best_action = 'escalacion_sla_humana';
+            }
+        }
+
         const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/$/, '');
         const params = new URLSearchParams({
             id: `eq.${leadId}`,
             tenant_id: `eq.${tenant.tenantId}`,
             select: current.has_takeover_columns === false
-                ? 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,updated_at'
-                : 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at,updated_at',
+                ? 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,updated_at'
+                : 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at,updated_at',
             limit: '1',
         });
 
@@ -329,12 +368,20 @@ export async function POST(req: Request) {
                             previous: {
                                 work_status: current.work_status,
                                 work_assignee_user_id: current.work_assignee_user_id,
+                                priority: current.priority,
+                                sla_status: current.sla_status,
+                                sla_is_escalated: current.sla_is_escalated,
+                                sla_escalation_level: current.sla_escalation_level,
                                 human_takeover_status: current.human_takeover_status,
                                 human_takeover_by_user_id: current.human_takeover_by_user_id,
                             },
                             next: {
                                 work_status: item.work_status ?? null,
                                 work_assignee_user_id: item.work_assignee_user_id ?? null,
+                                priority: item.priority ?? null,
+                                sla_status: item.sla_status ?? null,
+                                sla_is_escalated: item.sla_is_escalated ?? null,
+                                sla_escalation_level: item.sla_escalation_level ?? null,
                                 human_takeover_status: item.human_takeover_status ?? null,
                                 human_takeover_by_user_id: item.human_takeover_by_user_id ?? null,
                             },

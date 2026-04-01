@@ -3,6 +3,7 @@ import { canPerform } from '@/lib/permissions/access-control';
 import { mergeLeadFields, pickDedupMatchKind, type DedupMatchKind } from '@/lib/leads/dedup-policy';
 import { buildIntakeRaw, normalizeLeadIntake } from '@/lib/leads/intake-normalizer';
 import { buildLeadQualificationRouting } from '@/lib/leads/qualification-routing';
+import { evaluateLeadSlaPolicy } from '@/lib/leads/sla-escalation';
 import { insertLeadActivityEvents } from '@/lib/leads/activity-events';
 import { resolveTenantFromRequest } from '@/lib/tenant/tenant-request';
 import { extractBearerToken } from '@/lib/tenant/tenant-rpc-server';
@@ -66,6 +67,11 @@ type ExistingLeadRow = {
     lead_temperature: 'caliente' | 'tibio' | 'frio' | null;
     priority: 'P1' | 'P2' | 'P3' | null;
     sla_due_at: string | null;
+    sla_status?: 'no_sla' | 'on_time' | 'due_soon' | 'overdue' | null;
+    sla_is_escalated?: boolean | null;
+    sla_escalation_level?: 'none' | 'warning' | 'critical' | null;
+    sla_escalated_at?: string | null;
+    sla_last_evaluated_at?: string | null;
     next_best_action: string | null;
     quality_flags: unknown;
     spam_flags: unknown;
@@ -167,8 +173,8 @@ async function fetchExistingLeadByKey(
 
     const requestByKind = async (kind: DedupMatchKind, includeEmailColumns: boolean) => {
         const select = includeEmailColumns
-            ? 'id,tenant_id,campaign_id,source_id,form_id,phone,phone_norm,email,email_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,raw'
-            : 'id,tenant_id,campaign_id,source_id,form_id,phone,phone_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,raw';
+            ? 'id,tenant_id,campaign_id,source_id,form_id,phone,phone_norm,email,email_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,raw'
+            : 'id,tenant_id,campaign_id,source_id,form_id,phone,phone_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,raw';
 
         const params = new URLSearchParams();
         params.set('select', select);
@@ -346,6 +352,13 @@ export async function POST(req: Request) {
                 reasons: qualification.lead_score_reasons,
             };
 
+            const slaSignals = evaluateLeadSlaPolicy({
+                sla_due_at: qualification.sla_due_at,
+                priority: qualification.priority,
+                work_status: 'queued',
+                human_takeover_status: 'none',
+            });
+
             const intakeRawWithDedup = {
                 ...intakeRaw,
                 dedup: dedupMeta,
@@ -354,6 +367,14 @@ export async function POST(req: Request) {
                     queue_start: qualification.queue_start,
                     next_best_action: qualification.next_best_action,
                     sla_due_at: qualification.sla_due_at,
+                },
+                sla_policy: {
+                    status: slaSignals.sla_status,
+                    is_escalated: slaSignals.sla_is_escalated,
+                    escalation_level: slaSignals.sla_escalation_level,
+                    due_in_minutes: slaSignals.due_in_minutes,
+                    overdue_minutes: slaSignals.overdue_minutes,
+                    evaluated_at: nowIso,
                 },
             };
 
@@ -382,6 +403,11 @@ export async function POST(req: Request) {
                 lead_temperature: qualification.lead_temperature,
                 priority: qualification.priority,
                 sla_due_at: qualification.sla_due_at,
+                sla_status: slaSignals.sla_status,
+                sla_is_escalated: slaSignals.sla_is_escalated,
+                sla_escalation_level: slaSignals.sla_escalation_level,
+                sla_escalated_at: slaSignals.sla_is_escalated ? nowIso : null,
+                sla_last_evaluated_at: nowIso,
                 next_best_action: qualification.next_best_action,
                 quality_flags: qualification.quality_flags,
                 spam_flags: qualification.spam_flags,
@@ -433,6 +459,11 @@ export async function POST(req: Request) {
                     lead_temperature: existing.row.lead_temperature ?? qualification.lead_temperature,
                     priority: existing.row.priority ?? qualification.priority,
                     sla_due_at: existing.row.sla_due_at ?? qualification.sla_due_at,
+                    sla_status: existing.row.sla_status ?? slaSignals.sla_status,
+                    sla_is_escalated: existing.row.sla_is_escalated ?? slaSignals.sla_is_escalated,
+                    sla_escalation_level: existing.row.sla_escalation_level ?? slaSignals.sla_escalation_level,
+                    sla_escalated_at: existing.row.sla_escalated_at ?? (slaSignals.sla_is_escalated ? nowIso : null),
+                    sla_last_evaluated_at: nowIso,
                     next_best_action: existing.row.next_best_action ?? qualification.next_best_action,
                     quality_flags: Array.isArray(existing.row.quality_flags) ? existing.row.quality_flags : qualification.quality_flags,
                     spam_flags: Array.isArray(existing.row.spam_flags) ? existing.row.spam_flags : qualification.spam_flags,
@@ -448,8 +479,8 @@ export async function POST(req: Request) {
         }
 
         const select = emailColumnsSupported
-            ? 'id,tenant_id,campaign_id,campaign,source_id,form_id,channel,phone,phone_norm,email,email_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,created_at,updated_at,raw'
-            : 'id,tenant_id,campaign_id,campaign,source_id,form_id,channel,phone,phone_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,created_at,updated_at,raw';
+            ? 'id,tenant_id,campaign_id,campaign,source_id,form_id,channel,phone,phone_norm,email,email_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,created_at,updated_at,raw'
+            : 'id,tenant_id,campaign_id,campaign,source_id,form_id,channel,phone,phone_norm,queue_start,estado_usuario,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,created_at,updated_at,raw';
         const saved: Array<Record<string, unknown>> = [];
 
         if (rowsToMergeById.length) {
@@ -503,6 +534,11 @@ export async function POST(req: Request) {
         try {
             const tenantId = String(tenant.tenantId || '').trim();
             if (!tenantId) throw new Error('Missing tenant_id for lead activity');
+            const mergeTargetIds = new Set(
+                rowsToMergeById
+                    .map((row) => String(row.id || '').trim())
+                    .filter(Boolean)
+            );
 
             const events = saved.flatMap((row) => {
                 const leadId = String(row.id || '').trim();
@@ -513,7 +549,8 @@ export async function POST(req: Request) {
                 const qualification = asRecord(raw.qualification);
                 const routing = asRecord(raw.routing);
                 const matchedLeadId = String(dedup.matched_lead_id || '').trim();
-                const intakeEventType = matchedLeadId ? 'lead.intake.merged' : 'lead.intake.created';
+                const isMerged = !!matchedLeadId || mergeTargetIds.has(leadId);
+                const intakeEventType = isMerged ? 'lead.intake.merged' : 'lead.intake.created';
                 const now = new Date().toISOString();
 
                 const campaignIdRaw = row.campaign_id;
@@ -550,6 +587,21 @@ export async function POST(req: Request) {
                             priority: qualification.priority ?? row.priority ?? null,
                             route_queue: qualification.route_queue ?? routing.queue_start ?? row.queue_start ?? null,
                             next_best_action: routing.next_best_action ?? row.next_best_action ?? null,
+                        },
+                    },
+                    {
+                        tenantId,
+                        leadId,
+                        campaignId,
+                        eventType: 'lead.sla.evaluated',
+                        eventAt: now,
+                        source: 'api.leads.intake',
+                        payload: {
+                            sla_due_at: row.sla_due_at ?? null,
+                            sla_status: row.sla_status ?? null,
+                            sla_is_escalated: row.sla_is_escalated ?? null,
+                            sla_escalation_level: row.sla_escalation_level ?? null,
+                            priority: row.priority ?? null,
                         },
                     },
                 ];

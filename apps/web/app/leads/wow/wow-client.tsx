@@ -31,6 +31,13 @@ type WowItem = {
     lead_temperature: "caliente" | "tibio" | "frio" | null;
     priority: "P1" | "P2" | "P3" | null;
     sla_due_at: string | null;
+    sla_status?: "no_sla" | "on_time" | "due_soon" | "overdue" | null;
+    sla_is_escalated?: boolean | null;
+    sla_escalation_level?: "none" | "warning" | "critical" | null;
+    sla_escalated_at?: string | null;
+    sla_last_evaluated_at?: string | null;
+    sla_runtime_due_in_minutes?: number | null;
+    sla_runtime_overdue_minutes?: number | null;
     next_best_action: string | null;
     quality_flags: unknown[];
     spam_flags: unknown[];
@@ -62,6 +69,8 @@ type WowStatsResp = {
     tibios: number;
     frios: number;
     sla_vencido: number;
+    sla_due_soon: number;
+    sla_escalated: number;
 };
 
 function formatDatePe(iso: string | null | undefined) {
@@ -164,7 +173,7 @@ export default function LeadsWowQueueClient() {
     const [items, setItems] = useState<WowItem[]>([]);
     const [total, setTotal] = useState<number>(0);
 
-    const [stats, setStats] = useState<WowStatsResp>({ total: 0, calientes: 0, tibios: 0, frios: 0, sla_vencido: 0 });
+    const [stats, setStats] = useState<WowStatsResp>({ total: 0, calientes: 0, tibios: 0, frios: 0, sla_vencido: 0, sla_due_soon: 0, sla_escalated: 0 });
 
     const [callingLeadId, setCallingLeadId] = useState<string | null>(null);
     const [callingMode, setCallingMode] = useState<null | "human" | "llm">(null);
@@ -301,6 +310,8 @@ export default function LeadsWowQueueClient() {
                 tibios: Number(j.tibios || 0),
                 frios: Number(j.frios || 0),
                 sla_vencido: Number(j.sla_vencido || 0),
+                sla_due_soon: Number(j.sla_due_soon || 0),
+                sla_escalated: Number(j.sla_escalated || 0),
             });
         } catch {
             // no-op
@@ -343,6 +354,13 @@ export default function LeadsWowQueueClient() {
                 ...it,
                 work_queue: (item.work_queue as string | null) ?? it.work_queue ?? null,
                 work_status: (item.work_status as WowItem["work_status"]) ?? it.work_status ?? null,
+                priority: (item.priority as WowItem['priority']) ?? it.priority ?? null,
+                sla_due_at: (item.sla_due_at as string | null) ?? it.sla_due_at ?? null,
+                sla_status: (item.sla_status as WowItem['sla_status']) ?? it.sla_status ?? null,
+                sla_is_escalated: (item.sla_is_escalated as boolean | null) ?? it.sla_is_escalated ?? null,
+                sla_escalation_level: (item.sla_escalation_level as WowItem['sla_escalation_level']) ?? it.sla_escalation_level ?? null,
+                sla_escalated_at: (item.sla_escalated_at as string | null) ?? it.sla_escalated_at ?? null,
+                sla_last_evaluated_at: (item.sla_last_evaluated_at as string | null) ?? it.sla_last_evaluated_at ?? null,
                 work_assignee_user_id: (item.work_assignee_user_id as string | null) ?? null,
                 work_assignee_label: (item.work_assignee_label as string | null) ?? null,
                 work_assigned_at: (item.work_assigned_at as string | null) ?? null,
@@ -433,12 +451,14 @@ export default function LeadsWowQueueClient() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
                 <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Total</div><div className="text-2xl font-semibold">{stats.total || total || 0}</div></div>
                 <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">🔥 Calientes</div><div className="text-2xl font-semibold">{stats.calientes || 0}</div></div>
                 <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">🟡 Tibios</div><div className="text-2xl font-semibold">{stats.tibios || 0}</div></div>
                 <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">🧊 Fríos</div><div className="text-2xl font-semibold">{stats.frios || 0}</div></div>
                 <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">⏱️ SLA vencido</div><div className="text-2xl font-semibold">{stats.sla_vencido || 0}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">⏳ SLA próximo</div><div className="text-2xl font-semibold">{stats.sla_due_soon || 0}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">🚨 Escalados</div><div className="text-2xl font-semibold">{stats.sla_escalated || 0}</div></div>
             </div>
 
             <div className="flex items-center justify-between gap-3">
@@ -471,6 +491,9 @@ export default function LeadsWowQueueClient() {
                             const takeoverStatus = String(it.human_takeover_status || "none").toLowerCase();
                             const isTaken = takeoverStatus === "taken";
                             const isClosed = takeoverStatus === "closed";
+                            const slaStatus = String(it.sla_status || '').toLowerCase();
+                            const slaEscalated = Boolean(it.sla_is_escalated);
+                            const slaLevel = String(it.sla_escalation_level || 'none').toLowerCase();
                             return (
                                 <tr key={it.id} className="border-t">
                                     <td className="px-3 py-2"><a className="underline" href={`/leads/wow/view?id=${encodeURIComponent(it.id)}`}>{it.id.slice(0, 8)}.</a><div className="text-xs text-muted-foreground">{formatDatePe(it.created_at)}</div></td>
@@ -479,7 +502,18 @@ export default function LeadsWowQueueClient() {
                                     <td className="px-3 py-2"><span className="inline-flex items-center border rounded-full px-2 py-0.5 text-xs">{it.lead_temperature || "-"}</span></td>
                                     <td className="px-3 py-2 font-semibold">{it.lead_score ?? "-"}</td>
                                     <td className="px-3 py-2"><span className="inline-flex items-center border rounded-full px-2 py-0.5 text-xs">{it.priority || "-"}</span></td>
-                                    <td className="px-3 py-2"><div>{formatDatePe(it.sla_due_at)}</div><div className={`text-xs ${isOverdue(it.sla_due_at) ? "text-red-600" : "text-muted-foreground"}`}>{isOverdue(it.sla_due_at) ? "Vencido" : "OK"}</div></td>
+                                    <td className="px-3 py-2">
+                                        <div>{formatDatePe(it.sla_due_at)}</div>
+                                        <div className={`text-xs ${slaStatus === 'overdue' ? 'text-red-600' : slaStatus === 'due_soon' ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                            {slaStatus === 'overdue' ? 'Vencido' : slaStatus === 'due_soon' ? 'Próximo a vencer' : slaStatus === 'on_time' ? 'En tiempo' : isOverdue(it.sla_due_at) ? 'Vencido' : 'Sin SLA'}
+                                            {typeof it.sla_runtime_overdue_minutes === 'number' && it.sla_runtime_overdue_minutes > 0 ? ` · +${it.sla_runtime_overdue_minutes}m` : ''}
+                                        </div>
+                                        {slaEscalated ? (
+                                            <div className={`text-[11px] mt-1 ${slaLevel === 'critical' ? 'text-red-700' : 'text-orange-700'}`}>
+                                                escalado:{slaLevel}
+                                            </div>
+                                        ) : null}
+                                    </td>
                                     <td className="px-3 py-2">
                                         <div className="text-xs">
                                             <span className="inline-flex items-center border rounded-full px-2 py-0.5">{it.work_status || "queued"}</span>

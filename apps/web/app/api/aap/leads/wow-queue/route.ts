@@ -1,5 +1,6 @@
 // app/api/aap/leads/wow-queue/route.ts
 import { NextResponse } from "next/server";
+import { evaluateLeadSlaPolicy } from "@/lib/leads/sla-escalation";
 import { resolveTenantFromRequest } from "../../../../../lib/tenant/tenant-request";
 
 function env(name: string, required = true) {
@@ -94,9 +95,9 @@ export async function GET(req: Request) {
 
         params.set("order", "priority.asc,lead_score.desc,sla_due_at.asc,created_at.desc");
         const selectWithWorkQueue =
-            "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at";
+            "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at";
         const selectLegacy =
-            "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons";
+            "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,quality_flags,spam_flags,lead_score_reasons";
         params.set("select", selectWithWorkQueue);
         params.set("limit", String(limit));
         params.set("offset", String(offset));
@@ -144,7 +145,7 @@ export async function GET(req: Request) {
                 const leadsParams = new URLSearchParams();
                 leadsParams.set(
                     "select",
-                    "id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at,queue_start"
+                    "id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at,queue_start"
                 );
                 leadsParams.set("id", `in.(${ids.join(",")})`);
                 if (!tenant.isSuperAdmin) leadsParams.set("tenant_id", `eq.${tenant.tenantId}`);
@@ -164,6 +165,13 @@ export async function GET(req: Request) {
                             ...record,
                             work_queue: lead.work_queue || lead.queue_start || "wow_queue_default",
                             work_status: lead.work_status || "queued",
+                            priority: lead.priority || record.priority || null,
+                            sla_due_at: lead.sla_due_at || record.sla_due_at || null,
+                            sla_status: lead.sla_status || record.sla_status || null,
+                            sla_is_escalated: lead.sla_is_escalated ?? record.sla_is_escalated ?? null,
+                            sla_escalation_level: lead.sla_escalation_level || record.sla_escalation_level || null,
+                            sla_escalated_at: lead.sla_escalated_at || record.sla_escalated_at || null,
+                            sla_last_evaluated_at: lead.sla_last_evaluated_at || record.sla_last_evaluated_at || null,
                             work_assignee_user_id: lead.work_assignee_user_id || null,
                             work_assignee_label: lead.work_assignee_label || null,
                             work_assigned_at: lead.work_assigned_at || null,
@@ -178,6 +186,25 @@ export async function GET(req: Request) {
                 }
             }
         }
+
+        items = items.map((it) => {
+            const row = it && typeof it === 'object' ? (it as Record<string, unknown>) : {};
+            const evaluated = evaluateLeadSlaPolicy({
+                sla_due_at: typeof row.sla_due_at === 'string' ? row.sla_due_at : null,
+                priority: typeof row.priority === 'string' ? row.priority : null,
+                work_status: typeof row.work_status === 'string' ? row.work_status : 'queued',
+                human_takeover_status: typeof row.human_takeover_status === 'string' ? row.human_takeover_status : 'none',
+            });
+
+            return {
+                ...row,
+                sla_status: row.sla_status || evaluated.sla_status,
+                sla_is_escalated: row.sla_is_escalated ?? evaluated.sla_is_escalated,
+                sla_escalation_level: row.sla_escalation_level || evaluated.sla_escalation_level,
+                sla_runtime_due_in_minutes: evaluated.due_in_minutes,
+                sla_runtime_overdue_minutes: evaluated.overdue_minutes,
+            };
+        });
         const total = parseTotalFromContentRange(res.headers.get("content-range"));
 
         return json(200, { items, total, limit, offset, debug: { endpoint } });

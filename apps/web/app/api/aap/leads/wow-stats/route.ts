@@ -1,5 +1,6 @@
 // app/api/aap/leads/wow-stats/route.ts
 import { NextResponse } from "next/server";
+import { resolveTenantFromRequest } from "../../../../../lib/tenant/tenant-request";
 
 function env(name: string, required = true) {
     const v = (process.env[name] || "").trim();
@@ -7,7 +8,7 @@ function env(name: string, required = true) {
     return v;
 }
 
-function json(status: number, body: any) {
+function json(status: number, body: unknown) {
     return NextResponse.json(body, { status });
 }
 
@@ -24,6 +25,7 @@ function parseTotalFromContentRange(cr: string | null): number {
 export async function GET(req: Request) {
     try {
         const url = new URL(req.url);
+        const tenant = await resolveTenantFromRequest(req);
 
         const campaignIdRaw = (url.searchParams.get("campaign_id") || "").trim();
         const temperatureRaw = (url.searchParams.get("temperature") || "").trim().toLowerCase();
@@ -39,7 +41,7 @@ export async function GET(req: Request) {
 
         if (!key) throw new Error("Missing env var: SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY)");
 
-        const PROFILE = "demo_callcenter";
+        const PROFILE = "contact_center";
         const base = `${SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/v_leads_wow_queue`;
 
         const headers = new Headers();
@@ -52,8 +54,12 @@ export async function GET(req: Request) {
             temp?: "caliente" | "tibio" | "frio";
             includeTempFilter?: boolean;
             slaOverdue?: boolean;
+            slaStatus?: 'no_sla' | 'on_time' | 'due_soon' | 'overdue';
+            escalatedOnly?: boolean;
         }) => {
             const sp = new URLSearchParams();
+
+            if (!tenant.isSuperAdmin) sp.set("tenant_id", `eq.${tenant.tenantId}`);
 
             if (campaignIdRaw && UUID_RE.test(campaignIdRaw)) sp.set("campaign_id", `eq.${campaignIdRaw}`);
             if (["P1", "P2", "P3"].includes(priorityRaw)) sp.set("priority", `eq.${priorityRaw}`);
@@ -75,6 +81,14 @@ export async function GET(req: Request) {
                 // SLA vencido = sla_due_at < now
                 const nowIso = new Date().toISOString();
                 sp.set("sla_due_at", `lt.${nowIso}`);
+            }
+
+            if (opts?.slaStatus) {
+                sp.set('sla_status', `eq.${opts.slaStatus}`);
+            }
+
+            if (opts?.escalatedOnly) {
+                sp.set('sla_is_escalated', 'eq.true');
             }
 
             // solo para count via Content-Range
@@ -105,6 +119,8 @@ export async function GET(req: Request) {
 
         // SLA vencido (respeta filtros actuales, incluido temperature si está seleccionado)
         const slaVencido = await countBy(buildParams({ includeTempFilter: true, slaOverdue: true }));
+        const slaDueSoon = await countBy(buildParams({ includeTempFilter: true, slaStatus: 'due_soon' }));
+        const slaEscalated = await countBy(buildParams({ includeTempFilter: true, escalatedOnly: true }));
 
         // 🔥 Respuesta ultra-compatible (por si el UI espera distintos nombres)
         return json(200, {
@@ -112,6 +128,8 @@ export async function GET(req: Request) {
             total,
             sla_vencido: slaVencido,
             sla_overdue: slaVencido,
+            sla_due_soon: slaDueSoon,
+            sla_escalated: slaEscalated,
 
             // ✅ español simple
             calientes,
@@ -160,6 +178,8 @@ export async function GET(req: Request) {
                 tibios,
                 frios,
                 sla_vencido: slaVencido,
+                sla_due_soon: slaDueSoon,
+                sla_escalated: slaEscalated,
             },
 
             debug: {
@@ -169,7 +189,8 @@ export async function GET(req: Request) {
                 q: qRaw || null,
             },
         });
-    } catch (e: any) {
-        return json(500, { error: e?.message || "Unexpected error", details: String(e) });
+    } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : "Unexpected error";
+        return json(500, { error: message, details: String(e) });
     }
 }
