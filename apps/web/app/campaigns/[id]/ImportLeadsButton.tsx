@@ -2,7 +2,9 @@
 
 import React, { useRef, useState } from "react";
 import { SB_URL, SB_ANON, SB_SCHEMA } from "@/lib/supabaseRest";
+import { buildIntakeRaw, normalizeLeadIntake } from "@/lib/leads/intake-normalizer";
 import { useTenant } from "@/lib/tenant/use-tenant";
+import { readAccessTokenFromLocalStorage } from "@/lib/tenant/tenant-resolver";
 
 // Si ya tienes XLSX instalado úsalo. Si no, comenta el import y deja solo CSV.
 import * as XLSX from "xlsx";
@@ -16,34 +18,6 @@ type ImportMode = "merge" | "replace";
 
 function nowIso() {
     return new Date().toISOString();
-}
-
-function toE164PE(input: any): string | null {
-    const s0 = String(input ?? "").trim();
-    if (!s0) return null;
-
-    // deja solo dígitos
-    const digits = s0.replace(/[^\d]/g, "");
-
-    // si ya venía con +51 en texto original
-    if (s0.startsWith("+") && digits.startsWith("51") && digits.length === 11) {
-        return `+${digits}`;
-    }
-
-    // si viene 9 dígitos (móvil PE)
-    if (digits.length === 9 && digits.startsWith("9")) {
-        return `+51${digits}`;
-    }
-
-    // si viene 11 y empieza con 51
-    if (digits.length === 11 && digits.startsWith("51")) {
-        return `+${digits}`;
-    }
-
-    // fallback: si parece e164 sin +
-    if (digits.length >= 9) return digits.startsWith("51") ? `+${digits}` : `+51${digits.slice(-9)}`;
-
-    return null;
 }
 
 function parsePeDateTimeToIso(v: any): string | null {
@@ -142,11 +116,29 @@ function mapRowToLead(row: any, campaignId: string, campaignCode?: string) {
 
     const campaignText = String(pick(row, ["CAMPAÑA", "CAMPAÑA ", "campaign"])).trim() || (campaignCode ?? "");
 
+    const sourceRaw = String(pick(row, ["SOURCE", "source", "ORIGEN", "origen"])).trim() || "campaign_import";
+    const originRaw = String(pick(row, ["ORIGIN", "origin", "FUENTE", "fuente"])).trim() || "csv_xlsx";
+    const channelRaw = String(pick(row, ["CHANNEL", "channel", "CANAL", "canal"])).trim() || "import";
+
+    const normalized = normalizeLeadIntake({
+        source_id,
+        form_id,
+        email: pick(row, ["EMAIL", "E-MAIL", "email", "correo", "CORREO"]),
+        source: sourceRaw,
+        origin: originRaw,
+        channel: channelRaw,
+        phone: pick(row, ["NUMERO DEL CLIENTE", "NUMERO_DEL_CLIENTE", "phone"]),
+    });
+
     const lead = {
         source_id,
         form_id,
+        email: normalized.email,
         fecha: fechaIso, // ✅ ISO
         campaign: campaignText,
+        source: normalized.source,
+        origin: normalized.origin,
+        channel: normalized.channel,
 
         queue_start: String(pick(row, ["COLA DE INICIO", "COLA_DE_INICIO", "queue_start"])).trim() || null,
         queue_end: String(pick(row, ["COLA FINAL", "COLA_FINAL", "queue_end"])).trim() || null,
@@ -154,7 +146,8 @@ function mapRowToLead(row: any, campaignId: string, campaignCode?: string) {
         estado_cliente: String(pick(row, ["ESTADO CLIENTE", "estado_cliente"])).trim() || null,
         estado_usuario: String(pick(row, ["ESTADO DE USUARIO", "estado_usuario"])).trim() || null,
 
-        phone: toE164PE(pick(row, ["NUMERO DEL CLIENTE", "NUMERO_DEL_CLIENTE", "phone"])),
+        phone: normalized.phone,
+        phone_norm: normalized.phone_norm,
 
         usuario: String(pick(row, ["USUARIO", "usuario"])).trim() || null,
         extension: String(pick(row, ["EXTENSION DEL USUARIO", "EXTENSION", "extension"])).trim() || "0",
@@ -171,7 +164,12 @@ function mapRowToLead(row: any, campaignId: string, campaignCode?: string) {
         provincia: String(pick(row, ["Datos Instalación - Provincia:", "provincia"])).trim() || null,
         distrito: String(pick(row, ["Datos Instalación - Distrito:", "distrito"])).trim() || null,
 
-        raw: row, // trazabilidad
+        raw: buildIntakeRaw(row, {
+            source: normalized.source,
+            origin: normalized.origin,
+            channel: normalized.channel,
+            metadata: { imported_via: "campaign_file", file_schema: "legacy" },
+        }),
         campaign_id: campaignId,
         updated_at: nowIso(),
     };
@@ -334,21 +332,29 @@ export default function ImportLeadsButton({ campaignId, campaignCode }: Props) {
     }
 
     async function upsertLeads(leads: any[]) {
+        const token = readAccessTokenFromLocalStorage();
+        if (!token) {
+            throw new Error("No se encontró access_token en sesión. Reingresa para importar leads.");
+        }
+
         const BATCH = 500;
         for (let i = 0; i < leads.length; i += BATCH) {
             const batch = leads.slice(i, i + BATCH);
 
-            await sbRest("/rest/v1/leads", {
+            const res = await fetch("/api/leads/intake", {
                 method: "POST",
-                tenantId,
-                query: {
-                    on_conflict: "campaign_id,source_id", // 🔑 recomendado
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
                 },
-                extraHeaders: {
-                    Prefer: "resolution=merge-duplicates,return=minimal",
-                },
-                body: batch,
+                body: JSON.stringify({ items: batch }),
+                cache: "no-store",
             });
+
+            const body = await res.json().catch(() => null);
+            if (!res.ok) {
+                throw new Error((body as any)?.error || `Lead intake failed (${res.status})`);
+            }
         }
     }
 

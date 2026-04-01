@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { sbFetch } from "@/lib/supabaseRest";
+import { readAccessTokenFromLocalStorage } from "@/lib/tenant/tenant-resolver";
 
 function parseJsonOr<T>(text: string, fallback: T): { ok: boolean; value: T; error?: string } {
     const t = (text ?? "").trim();
@@ -154,10 +155,18 @@ export default function NewCampaignPage() {
 
         setSaving(true);
         try {
-            await sbFetch("/rest/v1/campaigns", {
+            const token = readAccessTokenFromLocalStorage();
+            if (!token) {
+                throw new Error("No access token in localStorage");
+            }
+
+            const createRes = await fetch("/api/campaigns", {
                 method: "POST",
-                tenantId: context.tenantId, // 👈 Inyección automática de tenant_id en el body
-                body: {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
                     code: code.trim(),
                     name: name.trim(),
                     is_active: isActive,
@@ -178,7 +187,6 @@ export default function NewCampaignPage() {
                     opening_script: openingScript ?? "",
                     opening_question: openingQuestion ?? "",
 
-                    // Canales / WhatsApp inbound
                     inbound_enabled: inboundEnabled,
                     inbound_default_mode: inboundDefaultMode,
                     inbound_llm_text_enabled: inboundLlmTextEnabled,
@@ -186,8 +194,23 @@ export default function NewCampaignPage() {
                     llm_fallback_to_human: llmFallbackToHuman,
                     wa_instance: trimOrEmpty(waInstance) || null,
                     wa_business_phone: waPhone || null,
-                },
+                }),
             });
+
+            const createBody = (await createRes.json().catch(() => ({}))) as {
+                item?: { id?: string };
+                error?: string;
+            };
+
+            if (!createRes.ok) {
+                throw new Error(createBody?.error || `HTTP ${createRes.status}`);
+            }
+
+            const createdId = String(createBody?.item?.id || "").trim();
+            if (createdId) {
+                router.push(`/campaigns/${createdId}`);
+                return;
+            }
 
             const id = await fetchCampaignByCode(code.trim(), context.tenantId);
             if (!id) {

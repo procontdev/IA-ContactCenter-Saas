@@ -15,6 +15,7 @@
         "test": "echo \"Tests pending\"",
         "db:migrations": "echo \"Use supabase/migrations\"",
         "smoke:tenant-members": "node scripts/smoke-tenant-members.js",
-        "smoke:tenant-settings": "node scripts/smoke-tenant-settings.js"
+        "smoke:tenant-settings": "node scripts/smoke-tenant-settings.js",
+        "smoke:lead-intake": "node scripts/smoke-lead-intake-source-mapping.js"
     }
 }

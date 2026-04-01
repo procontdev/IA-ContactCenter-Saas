@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { sbFetch } from "@/lib/supabaseRest";
 import { useTenant } from "@/lib/tenant/use-tenant";
+import { readAccessTokenFromLocalStorage } from "@/lib/tenant/tenant-resolver";
 
 type Campaign = {
     id: string;
@@ -122,10 +123,16 @@ export default function DuplicateCampaignButton({
             const newName = prompt("Nuevo NAME:", defaultName)?.trim() || defaultName;
 
             // 1) Crear campaña nueva
-            await sbFetch<any>("/rest/v1/campaigns", {
+            const token = readAccessTokenFromLocalStorage();
+            if (!token) throw new Error("No access token in localStorage");
+
+            const createRes = await fetch("/api/campaigns", {
                 method: "POST",
-                tenantId,
-                body: {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
                     code: newCode,
                     name: newName,
                     description: campaign.description ?? "",
@@ -141,11 +148,19 @@ export default function DuplicateCampaignButton({
                     is_active: campaign.is_active ?? true,
                     opening_script: campaign.opening_script ?? "",
                     opening_question: campaign.opening_question ?? "",
-                },
+                }),
             });
 
+            const createBody = (await createRes.json().catch(() => ({}))) as {
+                item?: { id?: string };
+                error?: string;
+            };
+            if (!createRes.ok) {
+                throw new Error(createBody?.error || `HTTP ${createRes.status}`);
+            }
+
             // 2) Recuperar id nuevo por code
-            const newId = await fetchCampaignIdByCode(newCode, tenantId);
+            const newId = String(createBody?.item?.id || "").trim() || await fetchCampaignIdByCode(newCode, tenantId);
 
             // 3) Duplicar productos
             if (products?.length) {
