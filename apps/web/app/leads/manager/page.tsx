@@ -104,6 +104,10 @@ function isManagerRole(role: string | null | undefined) {
     return r === "superadmin" || r === "tenant_admin" || r === "supervisor";
 }
 
+function formatCount(v: number | null | undefined) {
+    return Number(v || 0).toLocaleString("es-PE");
+}
+
 export default function LeadsManagerPage() {
     const { context, loading: tenantLoading } = useTenant();
 
@@ -246,33 +250,33 @@ export default function LeadsManagerPage() {
             {error ? <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Total</div><div className="text-xl font-semibold">{kpis?.total || 0}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Queued</div><div className="text-xl font-semibold">{kpis?.queued || 0}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">In progress</div><div className="text-xl font-semibold">{kpis?.in_progress || 0}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Sin owner</div><div className="text-xl font-semibold">{kpis?.unassigned || 0}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Takeover taken</div><div className="text-xl font-semibold">{kpis?.takeover_taken || 0}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">SLA due soon</div><div className="text-xl font-semibold">{kpis?.sla_due_soon || 0}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">SLA overdue</div><div className="text-xl font-semibold text-red-700">{kpis?.sla_overdue || 0}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Escalados</div><div className="text-xl font-semibold text-amber-700">{kpis?.sla_escalated || 0}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Leads totales</div><div className="text-xl font-semibold">{formatCount(kpis?.total)}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">En cola (queued)</div><div className="text-xl font-semibold">{formatCount(kpis?.queued)}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">En curso (in_progress)</div><div className="text-xl font-semibold">{formatCount(kpis?.in_progress)}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Sin owner</div><div className="text-xl font-semibold">{formatCount(kpis?.unassigned)}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Takeover activo</div><div className="text-xl font-semibold">{formatCount(kpis?.takeover_taken)}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">SLA por vencer (15m)</div><div className="text-xl font-semibold">{formatCount(kpis?.sla_due_soon)}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">SLA vencido</div><div className="text-xl font-semibold text-red-700">{formatCount(kpis?.sla_overdue)}</div></div>
+                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Escalados</div><div className="text-xl font-semibold text-amber-700">{formatCount(kpis?.sla_escalated)}</div></div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="border rounded-lg p-3 text-sm">
                     <div className="font-medium mb-2">Distribución por estado</div>
                     <div className="space-y-1 text-muted-foreground">
-                        <div>queued: <b className="text-foreground">{kpis?.queued || 0}</b></div>
-                        <div>assigned: <b className="text-foreground">{kpis?.assigned || 0}</b></div>
-                        <div>in_progress: <b className="text-foreground">{kpis?.in_progress || 0}</b></div>
-                        <div>done: <b className="text-foreground">{kpis?.done || 0}</b></div>
+                        <div>queued: <b className="text-foreground">{formatCount(kpis?.queued)}</b></div>
+                        <div>assigned: <b className="text-foreground">{formatCount(kpis?.assigned)}</b></div>
+                        <div>in_progress: <b className="text-foreground">{formatCount(kpis?.in_progress)}</b></div>
+                        <div>done: <b className="text-foreground">{formatCount(kpis?.done)}</b></div>
                     </div>
                 </div>
                 <div className="border rounded-lg p-3 text-sm">
                     <div className="font-medium mb-2">Ownership / takeover</div>
                     <div className="space-y-1 text-muted-foreground">
-                        <div>Con owner: <b className="text-foreground">{kpis?.with_owner || 0}</b></div>
-                        <div>Sin owner: <b className="text-foreground">{kpis?.unassigned || 0}</b></div>
-                        <div>takeover taken: <b className="text-foreground">{kpis?.takeover_taken || 0}</b></div>
-                        <div>takeover released: <b className="text-foreground">{kpis?.takeover_released || 0}</b></div>
+                        <div>Con owner: <b className="text-foreground">{formatCount(kpis?.with_owner)}</b></div>
+                        <div>Sin owner: <b className="text-foreground">{formatCount(kpis?.unassigned)}</b></div>
+                        <div>takeover taken: <b className="text-foreground">{formatCount(kpis?.takeover_taken)}</b></div>
+                        <div>takeover released: <b className="text-foreground">{formatCount(kpis?.takeover_released)}</b></div>
                     </div>
                 </div>
                 <div className="border rounded-lg p-3 text-sm">
@@ -286,7 +290,10 @@ export default function LeadsManagerPage() {
             </div>
 
             <div className="border rounded-lg overflow-hidden">
-                <div className="px-3 py-2 border-b text-sm font-medium">Leads operativos priorizados</div>
+                <div className="px-3 py-2 border-b text-sm font-medium flex items-center justify-between">
+                    <span>Leads operativos priorizados</span>
+                    <span className="text-xs text-muted-foreground">{loading ? "Actualizando..." : `${formatCount(items.length)} visibles`}</span>
+                </div>
                 <table className="w-full text-sm">
                     <thead className="bg-muted/30">
                         <tr>
@@ -300,7 +307,7 @@ export default function LeadsManagerPage() {
                     </thead>
                     <tbody>
                         {!items.length ? (
-                            <tr><td className="px-3 py-6 text-center text-muted-foreground" colSpan={6}>Sin leads para los filtros actuales.</td></tr>
+                            <tr><td className="px-3 py-6 text-center text-muted-foreground" colSpan={6}>{loading ? "Cargando leads operativos..." : "Sin leads para los filtros actuales."}</td></tr>
                         ) : items.map((it) => (
                             <tr key={it.id} className="border-t">
                                 <td className="px-3 py-2">

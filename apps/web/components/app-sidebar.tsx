@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { TenantSwitcher } from "@/components/tenant-switcher";
+import { logout } from "@/lib/auth/supabase-auth";
 
 const items = [
     { href: "/dashboard", label: "Dashboard" },
@@ -16,14 +17,14 @@ const items = [
     { href: "/reports", label: "Reportes" },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ userEmail }: { userEmail?: string | null }) {
     const pathname = usePathname();
 
     return (
-        <aside className="w-64 border-r bg-card">
+        <aside className="w-64 border-r bg-card flex min-h-screen flex-col">
             <div className="p-4 font-semibold">Orquesta IA Crm</div>
             <TenantSwitcher />
-            <nav className="px-2 space-y-1">
+            <nav className="px-2 space-y-1 flex-1">
                 {items.map((it) => {
                     const active = pathname === it.href;
                     return (
@@ -40,6 +41,20 @@ export function AppSidebar() {
                     );
                 })}
             </nav>
+
+            <div className="border-t p-3 space-y-2">
+                <div className="text-[11px] text-muted-foreground truncate" title={userEmail || undefined}>
+                    {userEmail || "Usuario autenticado"}
+                </div>
+                <button
+                    className="w-full rounded-md border px-3 py-2 text-sm hover:bg-muted"
+                    onClick={() => {
+                        void logout();
+                    }}
+                >
+                    Cerrar sesión
+                </button>
+            </div>
         </aside>
     );
 }

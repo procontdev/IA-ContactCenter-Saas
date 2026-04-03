@@ -67,11 +67,17 @@ async function main() {
     const cfg = { ...envLocal, ...envAnti, ...process.env };
 
     const apiBaseUrl = String(args.apiBaseUrl || process.env.SMOKE_API_BASE_URL || "http://localhost:3001").replace(/\/$/, "");
-    const token = pick(cfg, "SMOKE_BEARER_TOKEN", "NEXT_PUBLIC_SMOKE_BEARER_TOKEN");
+    const tokenArg = String(args.token || "").trim();
+    const token = tokenArg || pick(cfg, "SMOKE_BEARER_TOKEN", "NEXT_PUBLIC_SMOKE_BEARER_TOKEN");
+    const expectedStatus = Number(args.expectStatus || 200);
     const campaignId = String(args.campaignId || "").trim();
 
-    if (!token) {
-        fail("Falta token para smoke. Define SMOKE_BEARER_TOKEN en .env.antigravity.local o variable de entorno.");
+    if (!Number.isFinite(expectedStatus) || expectedStatus < 100 || expectedStatus > 599) {
+        fail("expectStatus debe ser un HTTP status válido (100-599)");
+    }
+
+    if (!token && expectedStatus !== 401) {
+        fail("Falta token para smoke. Define SMOKE_BEARER_TOKEN o usa --token. Para validar 401 usa --expectStatus 401 sin token.");
     }
 
     const params = new URLSearchParams();
@@ -79,12 +85,16 @@ async function main() {
     params.set("limit", "20");
 
     const url = `${apiBaseUrl}/api/aap/leads/manager-view?${params.toString()}`;
+    const headers = {
+        "Content-Type": "application/json",
+    };
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
     const res = await fetch(url, {
         method: "GET",
-        headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-        },
+        headers,
         cache: "no-store",
     });
 
@@ -96,8 +106,14 @@ async function main() {
         body = raw;
     }
 
-    if (!res.ok) {
-        fail(`Manager view respondió HTTP ${res.status}: ${typeof body === "string" ? body : JSON.stringify(body)}`);
+    if (res.status !== expectedStatus) {
+        fail(`Status inesperado. Esperado=${expectedStatus}, recibido=${res.status}. Payload=${typeof body === "string" ? body : JSON.stringify(body)}`);
+    }
+
+    if (expectedStatus !== 200) {
+        console.log(`✅ smoke-manager-view status check OK (${expectedStatus})`);
+        console.log(JSON.stringify({ ok: true, endpoint: url, expectedStatus, receivedStatus: res.status }, null, 2));
+        return;
     }
 
     const requiredKpis = [

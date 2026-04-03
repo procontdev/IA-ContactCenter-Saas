@@ -85,7 +85,14 @@ export async function GET(req: Request) {
         const token = extractBearerToken(req);
         if (!token) return json(401, { error: "Missing Bearer token" });
 
-        const tenant = await resolveTenantFromRequest(req, { fallbackEnabled: false });
+        let tenant;
+        try {
+            tenant = await resolveTenantFromRequest(req, { fallbackEnabled: false });
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            return json(403, { error: "No active tenant context", details: message });
+        }
+
         const role = normalizeRole(tenant.role);
         if (!tenant?.tenantId || !role) return json(403, { error: "No active tenant context" });
         if (!canPerform(role, "leads", "read")) return json(403, { error: "Forbidden: leads read required" });
