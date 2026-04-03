@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useTenantPlan } from "@/lib/packaging/use-tenant-plan";
 import { useTenant } from "@/lib/tenant/use-tenant";
+import { resolveLeadPlaybook } from "@/lib/leads/playbooks";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback-state";
 
 type WorkStatus = "" | "queued" | "assigned" | "in_progress" | "done";
 
@@ -110,6 +113,7 @@ function formatCount(v: number | null | undefined) {
 
 export default function LeadsManagerPage() {
     const { context, loading: tenantLoading } = useTenant();
+    const { plan, loading: planLoading } = useTenantPlan();
 
     const [token, setToken] = useState<string | null>(null);
     const [campaignId, setCampaignId] = useState("");
@@ -121,6 +125,7 @@ export default function LeadsManagerPage() {
     const [resp, setResp] = useState<ManagerResp | null>(null);
 
     const canRead = isManagerRole(context?.role);
+    const managerFeatureEnabled = Boolean(plan?.features?.manager_view);
 
     useEffect(() => {
         setToken(readAccessTokenFromStorage());
@@ -189,8 +194,22 @@ export default function LeadsManagerPage() {
     const kpis = resp?.kpis;
     const items = Array.isArray(resp?.items) ? resp!.items : [];
 
-    if (tenantLoading) {
-        return <div className="p-6 text-sm text-muted-foreground">Cargando contexto tenant...</div>;
+    if (tenantLoading || planLoading) {
+        return <LoadingState className="m-6" label="Cargando contexto de organización..." />;
+    }
+
+    if (!managerFeatureEnabled) {
+        return (
+            <div className="p-6 space-y-4">
+                <h1 className="text-2xl font-semibold">Manager View (Reporting operativo)</h1>
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    Esta feature no está incluida en tu plan actual ({plan?.plan_name || "Basic"}).
+                </div>
+                <div className="text-sm">
+                    Puedes continuar operando desde <Link className="underline" href="/leads/desk">Human Desk</Link>.
+                </div>
+            </div>
+        );
     }
 
     if (!canRead) {
@@ -247,7 +266,13 @@ export default function LeadsManagerPage() {
                 </div>
             </div>
 
-            {error ? <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+            {error ? (
+                <ErrorState
+                    title="No pudimos actualizar Manager View"
+                    description={`Puedes reintentar la carga. Detalle técnico: ${error}`}
+                    className="p-3"
+                />
+            ) : null}
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                 <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Leads totales</div><div className="text-xl font-semibold">{formatCount(kpis?.total)}</div></div>
@@ -307,32 +332,63 @@ export default function LeadsManagerPage() {
                     </thead>
                     <tbody>
                         {!items.length ? (
-                            <tr><td className="px-3 py-6 text-center text-muted-foreground" colSpan={6}>{loading ? "Cargando leads operativos..." : "Sin leads para los filtros actuales."}</td></tr>
-                        ) : items.map((it) => (
-                            <tr key={it.id} className="border-t">
-                                <td className="px-3 py-2">
-                                    <Link className="underline" href={`/leads/wow/view?id=${encodeURIComponent(it.id)}`}>{it.id.slice(0, 8)}.</Link>
-                                    <div className="text-xs text-muted-foreground">{it.phone || "-"} · {formatDatePe(it.created_at)}</div>
+                            <tr>
+                                <td className="px-3 py-6" colSpan={6}>
+                                    {loading ? (
+                                        <LoadingState label="Actualizando leads operativos..." />
+                                    ) : (
+                                        <EmptyState
+                                            title="No hay leads para los filtros actuales"
+                                            description="Ajusta campaña o estado de trabajo para ver resultados."
+                                        />
+                                    )}
                                 </td>
-                                <td className="px-3 py-2">{it.campaign || "-"}</td>
-                                <td className="px-3 py-2">
-                                    <span className="inline-flex items-center border rounded-full px-2 py-0.5 text-xs mr-1">{it.work_status || "queued"}</span>
-                                    <span className="inline-flex items-center border rounded-full px-2 py-0.5 text-xs">{it.priority || "-"}</span>
-                                </td>
-                                <td className="px-3 py-2">
-                                    <div className="text-xs">{it.work_assignee_label || it.work_assignee_user_id || "Sin owner"}</div>
-                                    <div className="text-xs text-muted-foreground">takeover:{it.human_takeover_status || "none"}</div>
-                                </td>
-                                <td className="px-3 py-2">
-                                    <div>{formatDatePe(it.sla_due_at)}</div>
-                                    <div className={`text-xs ${String(it.sla_status || "") === "overdue" ? "text-red-600" : String(it.sla_status || "") === "due_soon" ? "text-amber-600" : "text-muted-foreground"}`}>
-                                        {it.sla_status || "no_sla"}
-                                        {it.sla_is_escalated ? ` · escalado:${it.sla_escalation_level || "warning"}` : ""}
-                                    </div>
-                                </td>
-                                <td className="px-3 py-2">{it.next_best_action || "-"}</td>
                             </tr>
-                        ))}
+                        ) : items.map((it) => {
+                            const playbook = resolveLeadPlaybook({
+                                next_best_action: it.next_best_action,
+                                priority: it.priority,
+                                sla_status: it.sla_status,
+                                sla_is_escalated: it.sla_is_escalated,
+                                sla_escalation_level: it.sla_escalation_level,
+                                work_status: it.work_status,
+                                human_takeover_status: it.human_takeover_status,
+                                lead_temperature: it.lead_temperature,
+                                work_assignee_user_id: it.work_assignee_user_id,
+                                work_assignee_label: it.work_assignee_label,
+                            });
+
+                            return (
+                                <tr key={it.id} className="border-t">
+                                    <td className="px-3 py-2">
+                                        <Link className="underline" href={`/leads/wow/view?id=${encodeURIComponent(it.id)}`}>{it.id.slice(0, 8)}.</Link>
+                                        <div className="text-xs text-muted-foreground">{it.phone || "-"} · {formatDatePe(it.created_at)}</div>
+                                    </td>
+                                    <td className="px-3 py-2">{it.campaign || "-"}</td>
+                                    <td className="px-3 py-2">
+                                        <span className="inline-flex items-center border rounded-full px-2 py-0.5 text-xs mr-1">{it.work_status || "queued"}</span>
+                                        <span className="inline-flex items-center border rounded-full px-2 py-0.5 text-xs">{it.priority || "-"}</span>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <div className="text-xs">{it.work_assignee_label || it.work_assignee_user_id || "Sin owner"}</div>
+                                        <div className="text-xs text-muted-foreground">takeover:{it.human_takeover_status || "none"}</div>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <div>{formatDatePe(it.sla_due_at)}</div>
+                                        <div className={`text-xs ${String(it.sla_status || "") === "overdue" ? "text-red-600" : String(it.sla_status || "") === "due_soon" ? "text-amber-600" : "text-muted-foreground"}`}>
+                                            {it.sla_status || "no_sla"}
+                                            {it.sla_is_escalated ? ` · escalado:${it.sla_escalation_level || "warning"}` : ""}
+                                        </div>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                        <div>{it.next_best_action || "-"}</div>
+                                        <div className={`text-xs ${playbook.severity === "critical" ? "text-red-700" : playbook.severity === "warning" ? "text-amber-700" : "text-muted-foreground"}`}>
+                                            {playbook.title}
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { canPerform } from "@/lib/permissions/access-control";
+import { hasPlanFeature, resolveTenantPlanFromRequest } from "@/lib/packaging/tenant-plan";
 import { resolveTenantFromRequest } from "@/lib/tenant/tenant-request";
 import { extractBearerToken } from "@/lib/tenant/tenant-rpc-server";
 import type { UserRole } from "@/lib/tenant/tenant-types";
@@ -96,6 +97,17 @@ export async function GET(req: Request) {
         const role = normalizeRole(tenant.role);
         if (!tenant?.tenantId || !role) return json(403, { error: "No active tenant context" });
         if (!canPerform(role, "leads", "read")) return json(403, { error: "Forbidden: leads read required" });
+
+        const plan = await resolveTenantPlanFromRequest(req);
+        if (!hasPlanFeature(plan, "manager_view")) {
+            return json(403, {
+                error: "Feature not available in current plan",
+                code: "FEATURE_NOT_INCLUDED",
+                feature: "manager_view",
+                plan_code: plan.plan_code,
+            });
+        }
+
         if (!canReadManagerView(role)) {
             return json(403, { error: "Forbidden: manager view requires supervisor, tenant_admin or superadmin" });
         }
@@ -119,6 +131,16 @@ export async function GET(req: Request) {
 
         const queueBase = `${SUPABASE_URL}/rest/v1/v_leads_wow_queue`;
         const leadsBase = `${SUPABASE_URL}/rest/v1/leads`;
+
+        const probeQueueView = await fetch(
+            `${queueBase}?select=id,work_status,work_assignee_user_id&limit=1&offset=0`,
+            { headers, cache: "no-store" }
+        );
+        const probeQueueViewError = probeQueueView.ok ? "" : await probeQueueView.text().catch(() => "");
+        const useLegacyLeadsAsQueue = !probeQueueView.ok &&
+            probeQueueViewError.includes("v_leads_wow_queue") &&
+            probeQueueViewError.includes("does not exist");
+        const queueDataBase = useLegacyLeadsAsQueue ? leadsBase : queueBase;
 
         const buildQueueParams = (opts?: { workStatus?: WorkStatus | null; includeWorkStatus?: boolean }) => {
             const sp = new URLSearchParams();
@@ -177,10 +199,10 @@ export async function GET(req: Request) {
         queueCountParams.set("select", "id");
         queueCountParams.set("limit", "1");
         queueCountParams.set("offset", "0");
-        const total = await countBy(queueBase, queueCountParams);
+        const total = await countBy(queueDataBase, queueCountParams);
 
         const queued = await countBy(
-            queueBase,
+            queueDataBase,
             (() => {
                 const p = buildQueueParams({ includeWorkStatus: false, workStatus: "queued" });
                 p.set("select", "id");
@@ -191,7 +213,7 @@ export async function GET(req: Request) {
         );
 
         const assigned = await countBy(
-            queueBase,
+            queueDataBase,
             (() => {
                 const p = buildQueueParams({ includeWorkStatus: false, workStatus: "assigned" });
                 p.set("select", "id");
@@ -202,7 +224,7 @@ export async function GET(req: Request) {
         );
 
         const inProgress = await countBy(
-            queueBase,
+            queueDataBase,
             (() => {
                 const p = buildQueueParams({ includeWorkStatus: false, workStatus: "in_progress" });
                 p.set("select", "id");
@@ -213,7 +235,7 @@ export async function GET(req: Request) {
         );
 
         const done = await countBy(
-            queueBase,
+            queueDataBase,
             (() => {
                 const p = buildQueueParams({ includeWorkStatus: false, workStatus: "done" });
                 p.set("select", "id");
@@ -224,7 +246,7 @@ export async function GET(req: Request) {
         );
 
         const withOwner = await countBy(
-            queueBase,
+            queueDataBase,
             (() => {
                 const p = buildQueueParams();
                 p.set("work_assignee_user_id", "not.is.null");
@@ -236,7 +258,7 @@ export async function GET(req: Request) {
         );
 
         const takeoverTaken = await countBy(
-            queueBase,
+            queueDataBase,
             (() => {
                 const p = buildQueueParams();
                 p.set("human_takeover_status", "eq.taken");
@@ -248,7 +270,7 @@ export async function GET(req: Request) {
         );
 
         const takeoverReleased = await countBy(
-            queueBase,
+            queueDataBase,
             (() => {
                 const p = buildQueueParams();
                 p.set("human_takeover_status", "eq.released");
@@ -260,7 +282,7 @@ export async function GET(req: Request) {
         );
 
         const takeoverClosed = await countBy(
-            queueBase,
+            queueDataBase,
             (() => {
                 const p = buildQueueParams();
                 p.set("human_takeover_status", "eq.closed");
@@ -284,7 +306,14 @@ export async function GET(req: Request) {
         listParams.set("limit", String(limit));
         listParams.set("offset", "0");
 
-        const listEndpoint = `${queueBase}?${listParams.toString()}`;
+        if (useLegacyLeadsAsQueue) {
+            listParams.set(
+                "select",
+                "id,campaign_id,phone,created_at,priority,work_status,work_assignee_user_id,work_assignee_label,human_takeover_status,human_takeover_by_label,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,lead_temperature,lead_score,next_best_action"
+            );
+        }
+
+        const listEndpoint = `${queueDataBase}?${listParams.toString()}`;
         const listRes = await fetch(listEndpoint, { headers, cache: "no-store" });
         if (!listRes.ok) {
             const details = await listRes.text().catch(() => "");
@@ -292,7 +321,13 @@ export async function GET(req: Request) {
         }
 
         const itemsRaw = (await listRes.json().catch(() => [])) as QueueRow[];
-        const items = (Array.isArray(itemsRaw) ? itemsRaw : []).sort((a, b) => {
+        const items = (Array.isArray(itemsRaw) ? itemsRaw : []).map((row) => {
+            if (!useLegacyLeadsAsQueue) return row;
+            return {
+                ...row,
+                campaign: null,
+            };
+        }).sort((a, b) => {
             const prio = priorityWeight(a.priority) - priorityWeight(b.priority);
             if (prio !== 0) return prio;
 

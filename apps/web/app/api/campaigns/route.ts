@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { canPerform } from '@/lib/permissions/access-control';
+import { getPlanLimit, resolveTenantPlanFromRequest } from '@/lib/packaging/tenant-plan';
 import { CHANNEL_SET, isObject, normalizeOpsSettings } from '@/lib/campaigns/provisioning';
 import { resolveTenantFromRequest } from '@/lib/tenant/tenant-request';
 import { extractBearerToken } from '@/lib/tenant/tenant-rpc-server';
@@ -87,6 +88,12 @@ function authHeaders(token: string) {
 
 function strOrEmpty(v: unknown) {
     return String(v ?? '').trim();
+}
+
+function parseTotalFromContentRange(cr: string | null): number {
+    if (!cr) return 0;
+    const m = cr.match(/\/(\d+)\s*$/);
+    return m ? Number(m[1]) : 0;
 }
 
 function optionalTrimmed(v: unknown): string | null {
@@ -239,6 +246,39 @@ export async function POST(req: Request) {
         if (!canPerform(role, 'campaigns', 'create')) return json(403, { error: 'Forbidden: campaigns create required' });
 
         const body = (await req.json().catch(() => ({}))) as CreateCampaignBody;
+
+        const tenantPlan = await resolveTenantPlanFromRequest(req);
+        const maxActiveCampaigns = getPlanLimit(tenantPlan, 'max_active_campaigns');
+        if (body.is_active !== false && maxActiveCampaigns != null) {
+            const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/+$/, '');
+            const endpoint = `${baseUrl}/rest/v1/campaigns?select=id&tenant_id=eq.${encodeURIComponent(tenant.tenantId)}&is_active=eq.true&limit=1`;
+            const countRes = await fetch(endpoint, {
+                method: 'GET',
+                headers: {
+                    ...authHeaders(token),
+                    Prefer: 'count=exact',
+                },
+                cache: 'no-store',
+            });
+
+            if (!countRes.ok) {
+                const details = await countRes.text().catch(() => '');
+                throw new Error(`PostgREST count campaigns failed (${countRes.status}): ${details}`);
+            }
+
+            const activeCount = parseTotalFromContentRange(countRes.headers.get('content-range'));
+            if (activeCount >= maxActiveCampaigns) {
+                return json(403, {
+                    error: 'Plan limit reached for active campaigns',
+                    code: 'PLAN_LIMIT_REACHED',
+                    limit: 'max_active_campaigns',
+                    max_allowed: maxActiveCampaigns,
+                    current_count: activeCount,
+                    plan_code: tenantPlan.plan_code,
+                });
+            }
+        }
+
         const { row, usedLlmPolicyFallback } = await createCampaign(body, tenant.tenantId, token);
 
         if (!row) return json(500, { error: 'No campaign returned after create' });
