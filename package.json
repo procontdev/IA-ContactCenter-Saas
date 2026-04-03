@@ -14,9 +14,15 @@
         "typecheck": "pnpm --dir apps/web exec tsc --noEmit",
         "test": "echo \"Tests pending\"",
         "db:migrations": "echo \"Use supabase/migrations\"",
+        "seed:demo": "node scripts/seed-demo-data.js",
+        "seed:demo:no-reset": "node scripts/seed-demo-data.js --no-reset",
+        "validate:seed-demo": "node scripts/validate-demo-seed-data.js",
         "smoke:tenant-members": "node scripts/smoke-tenant-members.js",
         "smoke:tenant-settings": "node scripts/smoke-tenant-settings.js",
+        "smoke:billing-readiness": "node scripts/smoke-billing-subscription-scaffolding.js",
         "smoke:lead-intake": "node scripts/smoke-lead-intake-source-mapping.js",
-        "smoke:manager-view": "node scripts/smoke-manager-view.js"
+        "smoke:manager-view": "node scripts/smoke-manager-view.js",
+        "smoke:commercial-insights": "node scripts/smoke-commercial-insights.js",
+        "smoke:release-readiness": "node scripts/smoke-release-readiness.js"
     }
 }

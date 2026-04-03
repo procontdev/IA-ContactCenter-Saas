@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { canPerform } from "@/lib/permissions/access-control";
-import { hasPlanFeature, resolveTenantPlanFromRequest } from "@/lib/packaging/tenant-plan";
+import { hasPlanFeature, hasTenantFeatureAccess, resolveTenantPlanFromRequest } from "@/lib/packaging/tenant-plan";
 import { resolveTenantFromRequest } from "@/lib/tenant/tenant-request";
 import { extractBearerToken } from "@/lib/tenant/tenant-rpc-server";
 import type { UserRole } from "@/lib/tenant/tenant-types";
@@ -75,6 +75,16 @@ export async function GET(req: Request) {
                 code: "FEATURE_NOT_INCLUDED",
                 feature: "executive_dashboard",
                 plan_code: plan.plan_code,
+            });
+        }
+
+        if (!hasTenantFeatureAccess(plan, "executive_dashboard")) {
+            return json(402, {
+                error: "Feature blocked by current subscription status",
+                code: "SUBSCRIPTION_STATUS_RESTRICTED",
+                feature: "executive_dashboard",
+                plan_code: plan.plan_code,
+                subscription_status: plan.subscription.status,
             });
         }
 

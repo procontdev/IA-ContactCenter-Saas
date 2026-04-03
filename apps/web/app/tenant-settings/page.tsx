@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Topbar } from "@/components/topbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { TenantSubscriptionStatus } from "@/lib/packaging/tenant-plan";
+import { useTenantPlan } from "@/lib/packaging/use-tenant-plan";
 import { readAccessTokenFromLocalStorage } from "@/lib/tenant/tenant-resolver";
 import { useTenant } from "@/lib/tenant/use-tenant";
 import type { TenantSettings } from "@/lib/tenant/tenant-types";
@@ -28,6 +30,7 @@ function toText(v: unknown) {
 
 export default function TenantSettingsPage() {
     const { context, loading: tenantLoading } = useTenant();
+    const { plan, refreshPlan } = useTenantPlan();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -43,6 +46,11 @@ export default function TenantSettingsPage() {
     const [brandLogoUrl, setBrandLogoUrl] = useState("");
     const [website, setWebsite] = useState("");
     const [supportEmail, setSupportEmail] = useState("");
+    const [subscriptionStatus, setSubscriptionStatus] = useState<TenantSubscriptionStatus>("trial");
+    const [trialEndsAt, setTrialEndsAt] = useState("");
+    const [periodEndsAt, setPeriodEndsAt] = useState("");
+    const [subscriptionSaving, setSubscriptionSaving] = useState(false);
+    const [subscriptionMessage, setSubscriptionMessage] = useState("");
 
     const canManage = useMemo(
         () => context?.role === "tenant_admin" || context?.role === "superadmin",
@@ -92,6 +100,15 @@ export default function TenantSettingsPage() {
         if (tenantLoading) return;
         void loadSettings();
     }, [tenantLoading, context?.tenantId, loadSettings]);
+
+    useEffect(() => {
+        const status = String(plan?.subscription?.status || "trial").toLowerCase();
+        if (status === "trial" || status === "active" || status === "past_due" || status === "suspended" || status === "canceled") {
+            setSubscriptionStatus(status);
+        }
+        setTrialEndsAt(toText(plan?.subscription?.trial_ends_at));
+        setPeriodEndsAt(toText(plan?.subscription?.current_period_ends_at));
+    }, [plan?.subscription?.status, plan?.subscription?.trial_ends_at, plan?.subscription?.current_period_ends_at]);
 
     async function onSave() {
         if (!canManage) {
@@ -148,6 +165,38 @@ export default function TenantSettingsPage() {
             setError(e instanceof Error ? e.message : "Error saving tenant settings");
         } finally {
             setSaving(false);
+        }
+    }
+
+    async function onSaveSubscription() {
+        if (!canManage) {
+            setSubscriptionMessage("Solo tenant_admin puede actualizar suscripción.");
+            return;
+        }
+
+        setSubscriptionSaving(true);
+        setSubscriptionMessage("");
+
+        try {
+            const res = await fetch("/api/tenant/subscription", {
+                method: "PATCH",
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    status: subscriptionStatus,
+                    trial_ends_at: trialEndsAt.trim() || null,
+                    current_period_ends_at: periodEndsAt.trim() || null,
+                }),
+            });
+
+            const data = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+            await refreshPlan();
+            setSubscriptionMessage("Subscription actualizada");
+        } catch (e: unknown) {
+            setSubscriptionMessage(e instanceof Error ? e.message : "Error actualizando subscription");
+        } finally {
+            setSubscriptionSaving(false);
         }
     }
 
@@ -252,6 +301,66 @@ export default function TenantSettingsPage() {
                                 </Button>
                                 {!canManage && <span className="text-xs text-muted-foreground">Solo tenant_admin puede editar.</span>}
                             </div>
+                        </div>
+
+                        <div className="rounded-lg border bg-card p-4 space-y-4">
+                            <div className="text-sm font-medium">Billing readiness (subscription scaffolding MVP)</div>
+
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <div className="space-y-1">
+                                    <div className="text-xs text-muted-foreground">Plan actual</div>
+                                    <Input value={plan?.plan_name || "Pro"} disabled readOnly />
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="text-xs text-muted-foreground">Subscription status</div>
+                                    <select
+                                        className="w-full h-9 rounded-md border px-3 text-sm bg-background"
+                                        value={subscriptionStatus}
+                                        disabled={!canManage || subscriptionSaving}
+                                        onChange={(e) => setSubscriptionStatus(e.target.value as TenantSubscriptionStatus)}
+                                    >
+                                        <option value="trial">trial</option>
+                                        <option value="active">active</option>
+                                        <option value="past_due">past_due</option>
+                                        <option value="suspended">suspended</option>
+                                        <option value="canceled">canceled</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <div className="space-y-1">
+                                    <div className="text-xs text-muted-foreground">Trial ends at (ISO)</div>
+                                    <Input
+                                        value={trialEndsAt}
+                                        onChange={(e) => setTrialEndsAt(e.target.value)}
+                                        placeholder="2026-12-31T23:59:59.000Z"
+                                        disabled={!canManage || subscriptionSaving}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="text-xs text-muted-foreground">Current period ends at (ISO)</div>
+                                    <Input
+                                        value={periodEndsAt}
+                                        onChange={(e) => setPeriodEndsAt(e.target.value)}
+                                        placeholder="2026-12-31T23:59:59.000Z"
+                                        disabled={!canManage || subscriptionSaving}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <Button onClick={onSaveSubscription} disabled={!canManage || subscriptionSaving}>
+                                    {subscriptionSaving ? "Actualizando..." : "Actualizar subscription"}
+                                </Button>
+                                {!canManage && <span className="text-xs text-muted-foreground">Solo tenant_admin puede editar.</span>}
+                            </div>
+
+                            <div className="text-xs text-muted-foreground">
+                                Estado actual reportado por API: <span className="font-medium text-foreground">{plan?.subscription?.status || "trial"}</span>
+                            </div>
+
+                            {subscriptionMessage && <div className="text-sm text-muted-foreground">{subscriptionMessage}</div>}
                         </div>
 
                         {error && <div className="text-sm text-red-600">{error}</div>}

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getPlanLimit, resolveTenantPlanFromRequest } from '@/lib/packaging/tenant-plan';
+import { getPlanLimit, hasWriteAccessBySubscription, resolveTenantPlanFromRequest } from '@/lib/packaging/tenant-plan';
 import { callPlatformCoreRpc, normalizeRpcPayload, toHttpError } from '@/lib/tenant/tenant-rpc-server';
 
 type MemberRow = {
@@ -40,6 +40,15 @@ export async function POST(req: Request) {
         }
 
         const plan = await resolveTenantPlanFromRequest(req);
+        if (!hasWriteAccessBySubscription(plan)) {
+            return json(402, {
+                error: 'Member management blocked by current subscription status',
+                code: 'SUBSCRIPTION_STATUS_RESTRICTED',
+                subscription_status: plan.subscription.status,
+                plan_code: plan.plan_code,
+            });
+        }
+
         const maxMembers = getPlanLimit(plan, 'max_members');
         if (maxMembers != null) {
             const currentMembers = await callPlatformCoreRpc<MemberRow[]>(req, 'list_active_tenant_members', {});

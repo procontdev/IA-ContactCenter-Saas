@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback-state";
 import { useTenantPlan } from "@/lib/packaging/use-tenant-plan";
+import { hasTenantFeatureAccess } from "@/lib/packaging/tenant-plan";
 import { canPerform } from "@/lib/permissions/access-control";
 import { resolveLeadPlaybook } from "@/lib/leads/playbooks";
 import { sbFetch } from "@/lib/supabaseRest";
@@ -181,8 +182,10 @@ export default function OmnichannelWorkspacePage() {
     const canReadLeads = canPerform(role, "leads", "read");
     const canUpdateLeads = canPerform(role, "leads", "update");
     const canUpdateCalls = canPerform(role, "calls", "update");
-    const workspaceFeatureEnabled = Boolean(plan?.features?.omnichannel_workspace);
+    const workspaceFeatureIncluded = Boolean(plan?.features?.omnichannel_workspace);
+    const workspaceFeatureEnabled = Boolean(plan && hasTenantFeatureAccess(plan, "omnichannel_workspace"));
     const playbooksEnabled = Boolean(plan?.features?.playbooks_nba);
+    const subscriptionStatus = plan?.subscription?.status || "active";
 
     useEffect(() => {
         setToken(readAccessTokenFromStorage());
@@ -593,7 +596,7 @@ export default function OmnichannelWorkspacePage() {
         return <LoadingState className="m-6" label="Cargando Omnichannel Workspace..." />;
     }
 
-    if (!workspaceFeatureEnabled) {
+    if (!workspaceFeatureIncluded) {
         return (
             <div className="m-6 space-y-3">
                 <ErrorState
@@ -603,6 +606,21 @@ export default function OmnichannelWorkspacePage() {
                 <div className="text-sm flex gap-3 flex-wrap">
                     <Link className="underline" href="/leads/desk">Ir a Human Desk</Link>
                     <Link className="underline" href="/inbox">Ir a Inbox</Link>
+                </div>
+            </div>
+        );
+    }
+
+    if (!workspaceFeatureEnabled) {
+        return (
+            <div className="m-6 space-y-3">
+                <ErrorState
+                    title="Omnichannel Workspace temporalmente restringido"
+                    description={`Estado de suscripción actual: ${subscriptionStatus}. Actualiza el tenant en Configuración de organización.`}
+                />
+                <div className="text-sm flex gap-3 flex-wrap">
+                    <Link className="underline" href="/tenant-settings">Ir a Configuración de organización</Link>
+                    <Link className="underline" href="/leads/desk">Ir a Human Desk</Link>
                 </div>
             </div>
         );

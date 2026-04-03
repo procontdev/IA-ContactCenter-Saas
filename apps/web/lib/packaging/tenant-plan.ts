@@ -15,6 +15,38 @@ type RawTenantPlanRow = {
     limits: Record<string, unknown> | null;
 };
 
+type RawTenantSubscriptionRow = {
+    tenant_id: string;
+    plan_code: string | null;
+    status: string | null;
+    trial_ends_at: string | null;
+    current_period_ends_at: string | null;
+    cancel_at_period_end: boolean | null;
+    canceled_at: string | null;
+    past_due_since: string | null;
+    suspended_at: string | null;
+    provider: string | null;
+    provider_ref: string | null;
+    metadata: Record<string, unknown> | null;
+};
+
+export type TenantSubscriptionStatus = 'trial' | 'active' | 'past_due' | 'suspended' | 'canceled';
+
+export type TenantSubscriptionSnapshot = {
+    tenant_id: string;
+    plan_code: PlanCode;
+    status: TenantSubscriptionStatus;
+    trial_ends_at: string | null;
+    current_period_ends_at: string | null;
+    cancel_at_period_end: boolean;
+    canceled_at: string | null;
+    past_due_since: string | null;
+    suspended_at: string | null;
+    provider: string | null;
+    provider_ref: string | null;
+    metadata: Record<string, unknown>;
+};
+
 export type TenantPlanSnapshot = {
     tenant_id: string;
     plan_code: PlanCode;
@@ -23,11 +55,20 @@ export type TenantPlanSnapshot = {
     limits: Record<PlanLimitKey, number | null>;
     settings: Record<string, unknown>;
     limits_raw: Record<string, unknown>;
+    subscription: TenantSubscriptionSnapshot;
 };
 
 function asObject(value: unknown): Record<string, unknown> {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
     return value as Record<string, unknown>;
+}
+
+function normalizeSubscriptionStatus(value: unknown): TenantSubscriptionStatus {
+    const status = String(value || '').trim().toLowerCase();
+    if (status === 'trial' || status === 'active' || status === 'past_due' || status === 'suspended' || status === 'canceled') {
+        return status;
+    }
+    return 'active';
 }
 
 function parseFeatureOverrides(input: Record<string, unknown>) {
@@ -63,6 +104,13 @@ export async function resolveTenantPlanFromRequest(req: Request): Promise<Tenant
     const raw = await callPlatformCoreRpc<RawTenantPlanRow[] | RawTenantPlanRow>(req, 'get_active_tenant_plan', {});
     const row = normalizeRpcPayload(raw);
 
+    const rawSubscription = await callPlatformCoreRpc<RawTenantSubscriptionRow[] | RawTenantSubscriptionRow>(
+        req,
+        'get_active_tenant_subscription',
+        {}
+    );
+    const subscriptionRow = normalizeRpcPayload(rawSubscription);
+
     if (!row?.tenant_id) {
         return {
             tenant_id: '',
@@ -72,13 +120,29 @@ export async function resolveTenantPlanFromRequest(req: Request): Promise<Tenant
             limits: { ...PLAN_CATALOG[DEFAULT_PLAN_CODE].limits },
             settings: {},
             limits_raw: {},
+            subscription: {
+                tenant_id: '',
+                plan_code: DEFAULT_PLAN_CODE,
+                status: 'active',
+                trial_ends_at: null,
+                current_period_ends_at: null,
+                cancel_at_period_end: false,
+                canceled_at: null,
+                past_due_since: null,
+                suspended_at: null,
+                provider: null,
+                provider_ref: null,
+                metadata: {},
+            },
         };
     }
 
     const settings = asObject(row.settings);
     const limitsRaw = asObject(row.limits);
 
-    const planCode = normalizePlanCode(row.plan_code || settings.plan_code);
+    const rawSubPlanCode = String(subscriptionRow?.plan_code || '').trim().toLowerCase();
+    const subscriptionPlanCode = rawSubPlanCode ? normalizePlanCode(rawSubPlanCode) : null;
+    const planCode = normalizePlanCode(subscriptionPlanCode || row.plan_code || settings.plan_code);
     const base = PLAN_CATALOG[planCode];
 
     const featureOverrides = parseFeatureOverrides(asObject(settings.feature_overrides));
@@ -101,11 +165,40 @@ export async function resolveTenantPlanFromRequest(req: Request): Promise<Tenant
         },
         settings,
         limits_raw: limitsRaw,
+        subscription: {
+            tenant_id: subscriptionRow?.tenant_id || row.tenant_id,
+            plan_code: subscriptionPlanCode || planCode,
+            status: normalizeSubscriptionStatus(subscriptionRow?.status),
+            trial_ends_at: subscriptionRow?.trial_ends_at || null,
+            current_period_ends_at: subscriptionRow?.current_period_ends_at || null,
+            cancel_at_period_end: Boolean(subscriptionRow?.cancel_at_period_end),
+            canceled_at: subscriptionRow?.canceled_at || null,
+            past_due_since: subscriptionRow?.past_due_since || null,
+            suspended_at: subscriptionRow?.suspended_at || null,
+            provider: subscriptionRow?.provider || null,
+            provider_ref: subscriptionRow?.provider_ref || null,
+            metadata: asObject(subscriptionRow?.metadata),
+        },
     };
 }
 
 export function hasPlanFeature(plan: TenantPlanSnapshot, feature: PlanFeatureKey): boolean {
     return Boolean(plan?.features?.[feature]);
+}
+
+export function hasTenantFeatureAccess(plan: TenantPlanSnapshot, feature: PlanFeatureKey): boolean {
+    if (!hasPlanFeature(plan, feature)) return false;
+
+    const status = plan?.subscription?.status || 'active';
+    if (status === 'suspended' || status === 'canceled') return false;
+    if (status === 'past_due' && feature === 'executive_dashboard') return false;
+
+    return true;
+}
+
+export function hasWriteAccessBySubscription(plan: TenantPlanSnapshot): boolean {
+    const status = plan?.subscription?.status || 'active';
+    return status !== 'suspended' && status !== 'canceled';
 }
 
 export function getPlanLimit(plan: TenantPlanSnapshot, limit: PlanLimitKey): number | null {

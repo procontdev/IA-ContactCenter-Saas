@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { canPerform } from '@/lib/permissions/access-control';
-import { getPlanLimit, resolveTenantPlanFromRequest } from '@/lib/packaging/tenant-plan';
+import { getPlanLimit, hasWriteAccessBySubscription, resolveTenantPlanFromRequest } from '@/lib/packaging/tenant-plan';
 import { CHANNEL_SET, isObject, normalizeOpsSettings } from '@/lib/campaigns/provisioning';
 import { resolveTenantFromRequest } from '@/lib/tenant/tenant-request';
 import { extractBearerToken } from '@/lib/tenant/tenant-rpc-server';
@@ -248,6 +248,15 @@ export async function POST(req: Request) {
         const body = (await req.json().catch(() => ({}))) as CreateCampaignBody;
 
         const tenantPlan = await resolveTenantPlanFromRequest(req);
+        if (!hasWriteAccessBySubscription(tenantPlan)) {
+            return json(402, {
+                error: 'Campaign creation blocked by current subscription status',
+                code: 'SUBSCRIPTION_STATUS_RESTRICTED',
+                subscription_status: tenantPlan.subscription.status,
+                plan_code: tenantPlan.plan_code,
+            });
+        }
+
         const maxActiveCampaigns = getPlanLimit(tenantPlan, 'max_active_campaigns');
         if (body.is_active !== false && maxActiveCampaigns != null) {
             const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/+$/, '');

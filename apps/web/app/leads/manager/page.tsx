@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTenantPlan } from "@/lib/packaging/use-tenant-plan";
+import { hasTenantFeatureAccess } from "@/lib/packaging/tenant-plan";
 import { useTenant } from "@/lib/tenant/use-tenant";
 import { resolveLeadPlaybook } from "@/lib/leads/playbooks";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback-state";
@@ -125,7 +126,9 @@ export default function LeadsManagerPage() {
     const [resp, setResp] = useState<ManagerResp | null>(null);
 
     const canRead = isManagerRole(context?.role);
-    const managerFeatureEnabled = Boolean(plan?.features?.manager_view);
+    const managerFeatureIncluded = Boolean(plan?.features?.manager_view);
+    const managerFeatureEnabled = Boolean(plan && hasTenantFeatureAccess(plan, "manager_view"));
+    const subscriptionStatus = plan?.subscription?.status || "active";
 
     useEffect(() => {
         setToken(readAccessTokenFromStorage());
@@ -198,7 +201,7 @@ export default function LeadsManagerPage() {
         return <LoadingState className="m-6" label="Cargando contexto de organización..." />;
     }
 
-    if (!managerFeatureEnabled) {
+    if (!managerFeatureIncluded) {
         return (
             <div className="p-6 space-y-4">
                 <h1 className="text-2xl font-semibold">Manager View (Reporting operativo)</h1>
@@ -207,6 +210,20 @@ export default function LeadsManagerPage() {
                 </div>
                 <div className="text-sm">
                     Puedes continuar operando desde <Link className="underline" href="/leads/desk">Human Desk</Link>.
+                </div>
+            </div>
+        );
+    }
+
+    if (!managerFeatureEnabled) {
+        return (
+            <div className="p-6 space-y-4">
+                <h1 className="text-2xl font-semibold">Manager View (Reporting operativo)</h1>
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    Feature temporalmente restringida por el estado de suscripción: <strong>{subscriptionStatus}</strong>.
+                </div>
+                <div className="text-sm">
+                    Actualiza el estado desde <Link className="underline" href="/tenant-settings">Configuración de organización</Link>.
                 </div>
             </div>
         );

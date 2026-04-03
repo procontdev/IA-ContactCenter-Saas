@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTenantPlan } from "@/lib/packaging/use-tenant-plan";
+import { hasTenantFeatureAccess } from "@/lib/packaging/tenant-plan";
 import { useTenant } from "@/lib/tenant/use-tenant";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback-state";
 
@@ -122,7 +123,9 @@ export default function ExecutiveDemoDashboardPage() {
     const { context, loading: tenantLoading } = useTenant();
     const { plan, loading: planLoading } = useTenantPlan();
     const canRead = isExecutiveRole(context?.role);
-    const executiveFeatureEnabled = Boolean(plan?.features?.executive_dashboard);
+    const executiveFeatureIncluded = Boolean(plan?.features?.executive_dashboard);
+    const executiveFeatureEnabled = Boolean(plan && hasTenantFeatureAccess(plan, "executive_dashboard"));
+    const subscriptionStatus = plan?.subscription?.status || "active";
 
     const [token, setToken] = useState<string | null>(null);
     const [campaignId, setCampaignId] = useState("");
@@ -257,7 +260,7 @@ export default function ExecutiveDemoDashboardPage() {
         return <LoadingState className="m-6" label="Cargando contexto de organización..." />;
     }
 
-    if (!executiveFeatureEnabled) {
+    if (!executiveFeatureIncluded) {
         return (
             <div className="p-6 space-y-4">
                 <h1 className="text-2xl font-semibold">Executive Demo Dashboard / Investor View</h1>
@@ -267,6 +270,21 @@ export default function ExecutiveDemoDashboardPage() {
                 <div className="text-sm space-x-3">
                     <Link className="underline" href="/leads/desk">Human Desk</Link>
                     <Link className="underline" href="/dashboard">Dashboard</Link>
+                </div>
+            </div>
+        );
+    }
+
+    if (!executiveFeatureEnabled) {
+        return (
+            <div className="p-6 space-y-4">
+                <h1 className="text-2xl font-semibold">Executive Demo Dashboard / Investor View</h1>
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                    Feature temporalmente restringida por el estado de suscripción: <strong>{subscriptionStatus}</strong>.
+                </div>
+                <div className="text-sm space-x-3">
+                    <Link className="underline" href="/tenant-settings">Configuración de organización</Link>
+                    <Link className="underline" href="/leads/manager">Manager View</Link>
                 </div>
             </div>
         );

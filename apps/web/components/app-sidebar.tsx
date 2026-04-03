@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTenantPlan } from "@/lib/packaging/use-tenant-plan";
 import type { PlanFeatureKey } from "@/lib/packaging/plan-catalog";
+import { hasTenantFeatureAccess } from "@/lib/packaging/tenant-plan";
 import { TenantSwitcher } from "@/components/tenant-switcher";
 import { logout } from "@/lib/auth/supabase-auth";
 
@@ -31,10 +32,12 @@ export function AppSidebar({ userEmail }: { userEmail?: string | null }) {
     const pathname = usePathname();
     const currentPath = normalizePath(pathname || "/");
     const { plan } = useTenantPlan();
+    const subscriptionStatus = plan?.subscription?.status || "active";
 
     function isEnabled(feature?: PlanFeatureKey) {
         if (!feature) return true;
-        return Boolean(plan?.features?.[feature]);
+        if (!plan) return false;
+        return hasTenantFeatureAccess(plan, feature);
     }
 
     return (
@@ -43,6 +46,9 @@ export function AppSidebar({ userEmail }: { userEmail?: string | null }) {
             <TenantSwitcher />
             <div className="px-4 pb-2 text-[11px] text-muted-foreground">
                 Plan: <span className="font-medium text-foreground">{plan?.plan_name || "..."}</span>
+            </div>
+            <div className="px-4 pb-3 text-[11px] text-muted-foreground">
+                Subscription: <span className="font-medium text-foreground">{subscriptionStatus}</span>
             </div>
             <nav className="px-2 space-y-1 flex-1">
                 {items.map((it) => {
