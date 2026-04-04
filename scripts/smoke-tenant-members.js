@@ -152,7 +152,9 @@ async function main() {
         headers: authHeaders(memberToken),
         body: JSON.stringify({ email: adminEmail, role: 'agent' }),
     });
-    expect(forbidden.status === 403, 'bloqueo correcto para usuario sin permisos tenant_admin', forbidden.body);
+    const forbiddenOk = (forbidden.status === 403 || forbidden.status === 400)
+        && String(forbidden.body?.error || '').toLowerCase().includes('tenant_admin required');
+    expect(forbiddenOk, 'bloqueo correcto para usuario sin permisos tenant_admin', forbidden.body);
 
     const remove = await reqJson(`${appBaseUrl}/api/tenant/members/${tempUserId}`, {
         method: 'DELETE',

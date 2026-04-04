@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 // Ajusta este import según tu proyecto:
 import { sbFetch } from "@/lib/supabaseRest";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback-state";
 
 type CampaignStatsRow = {
     campaign_id: string;
@@ -40,6 +41,8 @@ type CampaignStatsRow = {
 };
 
 import { useTenant } from "@/lib/tenant/use-tenant";
+
+const DEMO_CODE_PREFIX = "DEMOSEED_";
 
 async function fetchCampaignStats(tenantId?: string): Promise<CampaignStatsRow[]> {
     return sbFetch<CampaignStatsRow[]>("/rest/v1/v_campaign_stats", {
@@ -92,7 +95,7 @@ export default function CampaignsPage() {
 
     useEffect(() => {
         if (tenantLoading) return;
-        
+
         let alive = true;
         async function run() {
             setLoading(true);
@@ -161,17 +164,17 @@ export default function CampaignsPage() {
                     />
                     Solo activas
                 </label>
+                <button
+                    className="inline-flex items-center rounded-md border px-3 py-2 text-xs hover:bg-muted"
+                    onClick={() => setQ(DEMO_CODE_PREFIX)}
+                >
+                    Ver solo DEMOSEED_
+                </button>
             </div>
 
-            {loading && (
-                <div className="rounded-xl border p-4 text-sm text-muted-foreground">Cargando campañas…</div>
-            )}
+            {loading && <LoadingState label="Cargando campañas y métricas..." />}
 
-            {error && (
-                <div className="rounded-xl border p-4 text-sm text-red-600">
-                    Error: {error}
-                </div>
-            )}
+            {error && <ErrorState title="No pudimos cargar campañas" description={error} />}
 
             {!loading && !error && (
                 <div className="rounded-xl border overflow-x-auto">
@@ -204,6 +207,11 @@ export default function CampaignsPage() {
                                             </Link>
                                             <div className="text-xs text-muted-foreground">
                                                 <span className="font-mono">{r.campaign_code ?? "-"}</span>
+                                                {String(r.campaign_code || "").toUpperCase().startsWith(DEMO_CODE_PREFIX) ? (
+                                                    <span className="ml-2 inline-flex rounded-full border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                                                        DEMO
+                                                    </span>
+                                                ) : null}
                                                 {r.description ? (
                                                     <>
                                                         {" "}
@@ -270,8 +278,11 @@ export default function CampaignsPage() {
 
                             {filtered.length === 0 && (
                                 <tr>
-                                    <td className="p-4 text-sm text-muted-foreground" colSpan={11}>
-                                        No hay campañas que coincidan con el filtro.
+                                    <td className="p-4" colSpan={11}>
+                                        <EmptyState
+                                            title="No encontramos campañas con esos filtros"
+                                            description="Ajusta la búsqueda o desactiva el filtro de campañas activas."
+                                        />
                                     </td>
                                 </tr>
                             )}

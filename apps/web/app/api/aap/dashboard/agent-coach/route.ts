@@ -1,5 +1,6 @@
 // app/api/aap/dashboard/agent-coach/route.ts
 import { NextResponse } from "next/server";
+import { resolveTenantFromRequest } from "../../../../../lib/tenant/tenant-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -190,15 +191,22 @@ type SlaBucketRow = {
 export async function POST(req: Request) {
     try {
         const body = (await req.json().catch(() => ({}))) as any;
+        const tenant = await resolveTenantFromRequest(req);
+        const hasBearer = Boolean(req.headers.get("authorization") || req.headers.get("Authorization"));
 
         const p_from_pe = String(body?.p_from_pe || "").trim();
         const p_to_pe = String(body?.p_to_pe || "").trim();
-        const p_tenant_id = body?.p_tenant_id ? String(body.p_tenant_id) : null; // ✅ Tenant ID
+        const requestedTenant = body?.p_tenant_id ? String(body.p_tenant_id) : null;
+        const p_tenant_id = tenant.tenantId;
         const p_campaign_id = body?.p_campaign_id ? String(body.p_campaign_id) : null;
         const p_agent = body?.p_agent ? String(body.p_agent) : null;
 
         if (!p_from_pe || !p_to_pe || !p_tenant_id) {
-            return jsonErr("Missing p_from_pe / p_to_pe / p_tenant_id", 400);
+            return jsonErr("Missing p_from_pe / p_to_pe", 400);
+        }
+
+        if (hasBearer && requestedTenant && requestedTenant !== p_tenant_id && !tenant.isSuperAdmin) {
+            return jsonErr("Forbidden tenant scope", 403);
         }
 
         const agentKpisPayload = {

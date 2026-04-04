@@ -150,6 +150,45 @@ async function main() {
         snippet: short({ status: takeover.body?.item?.human_takeover_status, by: takeover.body?.item?.human_takeover_by_label }),
     });
 
+    const setStatus = await reqJson(`${appBaseUrl}/api/aap/leads/work-queue/assign`, {
+        method: 'POST',
+        headers: h(adminToken),
+        body: JSON.stringify({ lead_id: leadId, operation: 'set_status', work_status: 'in_progress' }),
+    });
+    out.push({
+        check: 'E.status_change',
+        endpoint: '/api/aap/leads/work-queue/assign',
+        status: setStatus.status,
+        pass: setStatus.ok && setStatus.body?.item?.work_status === 'in_progress',
+        snippet: short({ work_status: setStatus.body?.item?.work_status }),
+    });
+
+    const takeoverRelease = await reqJson(`${appBaseUrl}/api/aap/leads/work-queue/assign`, {
+        method: 'POST',
+        headers: h(adminToken),
+        body: JSON.stringify({ lead_id: leadId, operation: 'takeover_release' }),
+    });
+    out.push({
+        check: 'F.takeover_release',
+        endpoint: '/api/aap/leads/work-queue/assign',
+        status: takeoverRelease.status,
+        pass: takeoverRelease.ok && takeoverRelease.body?.item?.human_takeover_status === 'released',
+        snippet: short({ status: takeoverRelease.body?.item?.human_takeover_status, released_at: takeoverRelease.body?.item?.human_takeover_released_at }),
+    });
+
+    const takeoverClose = await reqJson(`${appBaseUrl}/api/aap/leads/work-queue/assign`, {
+        method: 'POST',
+        headers: h(adminToken),
+        body: JSON.stringify({ lead_id: leadId, operation: 'takeover_close' }),
+    });
+    out.push({
+        check: 'G.takeover_close',
+        endpoint: '/api/aap/leads/work-queue/assign',
+        status: takeoverClose.status,
+        pass: takeoverClose.ok && takeoverClose.body?.item?.human_takeover_status === 'closed',
+        snippet: short({ status: takeoverClose.body?.item?.human_takeover_status, closed_at: takeoverClose.body?.item?.human_takeover_closed_at }),
+    });
+
     const timeline = await reqJson(`${appBaseUrl}/api/aap/leads/${encodeURIComponent(leadId)}/timeline?limit=120`, {
         method: 'GET',
         headers: h(adminToken),
@@ -160,12 +199,16 @@ async function main() {
     const hasCreate = eventTypes.includes('lead.intake.created');
     const hasMerge = eventTypes.includes('lead.intake.merged');
     const hasAssign = eventTypes.includes('lead.assignment.assigned');
+    const hasRouting = eventTypes.includes('lead.qualification.routed');
     const hasTakeover = eventTypes.includes('lead.takeover.taken');
+    const hasStatus = eventTypes.includes('lead.work.status_changed');
+    const hasTakeoverRelease = eventTypes.includes('lead.takeover.released');
+    const hasTakeoverClose = eventTypes.includes('lead.takeover.closed');
     out.push({
-        check: 'E.timeline_read_order_payload',
+        check: 'H.timeline_read_order_payload',
         endpoint: '/api/aap/leads/[leadId]/timeline',
         status: timeline.status,
-        pass: timeline.ok && hasCreate && hasMerge && hasAssign && hasTakeover,
+        pass: timeline.ok && hasCreate && hasMerge && hasRouting && hasAssign && hasStatus && hasTakeover && hasTakeoverRelease && hasTakeoverClose,
         snippet: short({ count: timelineItems.length, first_types: eventTypes.slice(0, 8) }),
     });
 
@@ -173,7 +216,7 @@ async function main() {
         method: 'GET',
     });
     out.push({
-        check: 'F.role_guardrail_missing_token',
+        check: 'I.role_guardrail_missing_token',
         endpoint: '/api/aap/leads/[leadId]/timeline',
         status: noToken.status,
         pass: noToken.status === 401,
@@ -185,7 +228,7 @@ async function main() {
         headers: h(adminToken),
     });
     out.push({
-        check: 'G.scope_guardrail',
+        check: 'J.scope_guardrail',
         endpoint: '/api/aap/leads/[leadId]/timeline',
         status: outScope.status,
         pass: outScope.status === 404,

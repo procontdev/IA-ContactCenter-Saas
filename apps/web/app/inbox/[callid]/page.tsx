@@ -366,6 +366,14 @@ export default function InboxDetailPage() {
             {thread?.campaign_code ? `${thread.campaign_code} · ` : ""}{thread?.campaign_name ?? "—"} · {thread?.channel ?? "—"}
           </div>
 
+          {thread?.lead_id ? (
+            <div className="text-xs pt-1">
+              <Link className="underline" href={`/leads/workspace?leadId=${encodeURIComponent(thread.lead_id)}&callId=${encodeURIComponent(callId || "")}`}>
+                Abrir Omnichannel Workspace
+              </Link>
+            </div>
+          ) : null}
+
           <div className="text-xs text-muted-foreground pt-1">
             modo: <span className="font-mono">{thread?.mode ?? "—"}</span>{" · "}
             human_status: <span className="font-mono">{thread?.human_status ?? "—"}</span>

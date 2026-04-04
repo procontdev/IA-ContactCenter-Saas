@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import { ErrorState } from "@/components/ui/feedback-state";
 import { getValidSession, logout, onAuthSessionChanged, readStoredSession } from "@/lib/auth/supabase-auth";
 import { resolveTenantContext } from "@/lib/tenant/tenant-resolver";
 
@@ -91,6 +92,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
     }
 
     if (status === "tenant-error") {
+        const tenantErrorSession = readStoredSession();
         return (
             <div className="flex min-h-screen items-center justify-center p-6 bg-slate-50">
                 <div className="w-full max-w-lg rounded-xl border bg-white p-6 space-y-4 shadow-sm">
@@ -100,8 +102,15 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
                         asignar membresía en <span className="font-mono">platform_core.tenant_users</span>.
                     </p>
                     {tenantError ? (
-                        <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">{tenantError}</div>
+                        <ErrorState
+                            title="No pudimos validar la organización activa"
+                            description={tenantError}
+                            className="text-xs"
+                        />
                     ) : null}
+                    <div className="text-xs text-muted-foreground">
+                        Usuario de sesión: <span className="font-mono">{tenantErrorSession?.user?.email || "(sin email)"}</span>
+                    </div>
                     <div className="flex gap-2">
                         <button
                             className="rounded-md border px-3 py-2 text-sm hover:bg-muted"

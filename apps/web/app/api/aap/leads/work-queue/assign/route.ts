@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { canPerform } from '@/lib/permissions/access-control';
 import { insertLeadActivityEvents } from '@/lib/leads/activity-events';
+import { resolveLeadAutomationRules } from '@/lib/leads/automation-rules';
 import { evaluateLeadSlaPolicy } from '@/lib/leads/sla-escalation';
 import { resolveTenantFromRequest } from '@/lib/tenant/tenant-request';
 import { callPlatformCoreRpc, extractBearerToken } from '@/lib/tenant/tenant-rpc-server';
@@ -175,9 +176,7 @@ export async function POST(req: Request) {
         const leadId = String(body?.lead_id || '').trim();
         const operation = String(body?.operation || '').trim().toLowerCase();
         const requestedStatus = String(body?.work_status || '').trim().toLowerCase();
-        const isTakeoverOp = ['takeover_take', 'takeover_release', 'takeover_close'].includes(operation);
-
-        if (!isTakeoverOp && !canPerform(role, 'leads', 'update')) {
+        if (!canPerform(role, 'leads', 'update')) {
             return json(403, { error: 'Forbidden: leads update required' });
         }
 
@@ -186,7 +185,9 @@ export async function POST(req: Request) {
             return json(400, { error: 'operation inválida. Usa assign, release, set_status, takeover_take, takeover_release o takeover_close' });
         }
 
-        const current = await fetchLead(leadId, tenant.tenantId, token);
+        const tenantId = tenant.tenantId;
+
+        const current = await fetchLead(leadId, tenantId, token);
         if (!current) return json(404, { error: 'Lead not found in active tenant' });
 
         const nowIso = new Date().toISOString();
@@ -310,13 +311,28 @@ export async function POST(req: Request) {
             }
         }
 
+        const automation = resolveLeadAutomationRules({
+            operation:
+                operation === 'assign' ||
+                    operation === 'release' ||
+                    operation === 'set_status' ||
+                    operation === 'takeover_take' ||
+                    operation === 'takeover_release' ||
+                    operation === 'takeover_close'
+                    ? operation
+                    : 'unknown',
+            current,
+            draftPatch: patchBody,
+        });
+        Object.assign(patchBody, automation.patch);
+
         const baseUrl = env('NEXT_PUBLIC_SUPABASE_URL').replace(/\/$/, '');
         const params = new URLSearchParams({
             id: `eq.${leadId}`,
-            tenant_id: `eq.${tenant.tenantId}`,
+            tenant_id: `eq.${tenantId}`,
             select: current.has_takeover_columns === false
-                ? 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,updated_at'
-                : 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at,updated_at',
+                ? 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,updated_at'
+                : 'id,tenant_id,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at,updated_at',
             limit: '1',
         });
 
@@ -351,12 +367,28 @@ export async function POST(req: Request) {
             };
 
             const eventType = eventTypeByOperation[operation] || 'lead.work.updated';
+            const automationEvents = automation.applied_rules.map((rule) => ({
+                tenantId,
+                leadId,
+                campaignId: current.campaign_id || null,
+                eventType: 'lead.automation.rule_applied',
+                source: 'automation.lead-rules-mvp',
+                actorUserId: actor?.userId || null,
+                actorLabel: actor?.email || actor?.userId || null,
+                payload: {
+                    rule_id: rule.rule_id,
+                    trigger: rule.trigger,
+                    reason: rule.reason,
+                    changes: rule.changes,
+                    operation,
+                },
+            }));
             await insertLeadActivityEvents({
                 baseUrl,
                 token,
                 events: [
                     {
-                        tenantId: tenant.tenantId,
+                        tenantId,
                         leadId,
                         campaignId: current.campaign_id || null,
                         eventType,
@@ -385,15 +417,24 @@ export async function POST(req: Request) {
                                 human_takeover_status: item.human_takeover_status ?? null,
                                 human_takeover_by_user_id: item.human_takeover_by_user_id ?? null,
                             },
+                            automation: {
+                                applied_rules: automation.applied_rules,
+                            },
                         },
                     },
+                    ...automationEvents,
                 ],
             });
         } catch {
             // MVP: no bloquear flujo operativo por fallo de auditoría
         }
 
-        return json(200, { item });
+        return json(200, {
+            item,
+            automation: {
+                applied_rules: automation.applied_rules,
+            },
+        });
     } catch (e: unknown) {
         return json(500, { error: e instanceof Error ? e.message : 'Unexpected error' });
     }

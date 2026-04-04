@@ -525,6 +525,7 @@ export default function LeadsWowQueueClient() {
                                     <td className="px-3 py-2">
                                         <div className="flex flex-wrap gap-2">
                                             <a className="underline" href={`/leads/wow/view?id=${encodeURIComponent(it.id)}#wow-insights`}>Ver</a>
+                                            <a className="underline" href={`/leads/workspace?leadId=${encodeURIComponent(it.id)}`}>Workspace</a>
                                             {canHuman ? <button className="border rounded-md px-2 py-1 text-xs disabled:opacity-50" disabled={rowCalling} onClick={() => startCallFromRow(it, "human")}>{rowCalling && callingMode === "human" ? "Llamando..." : "Llamar (Humano)"}</button> : null}
                                             {canIA ? <button className="border rounded-md px-2 py-1 text-xs disabled:opacity-50" disabled={rowCalling} onClick={() => startCallFromRow(it, "llm")}>{rowCalling && callingMode === "llm" ? "Llamando..." : "Llamar (IA)"}</button> : null}
 

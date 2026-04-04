@@ -3,6 +3,7 @@ import { canPerform } from '@/lib/permissions/access-control';
 import { extractBearerToken } from '@/lib/tenant/tenant-rpc-server';
 import { resolveTenantFromRequest } from '@/lib/tenant/tenant-request';
 import type { UserRole } from '@/lib/tenant/tenant-types';
+import { CHANNEL_SET, isObject, normalizeOpsSettings, normalizeChannelList } from '@/lib/campaigns/provisioning';
 
 type CampaignRow = {
     id: string;
@@ -32,7 +33,6 @@ type PatchBody = {
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const CHANNELS = new Set(['whatsapp', 'voice', 'webchat', 'email', 'sms', 'telegram']);
 let HAS_OPS_SETTINGS_COLUMN: boolean | null = null;
 
 function env(name: string, required = true) {
@@ -45,10 +45,6 @@ function json(status: number, body: unknown) {
     return NextResponse.json(body, { status });
 }
 
-function isObject(v: unknown): v is Record<string, unknown> {
-    return Boolean(v) && typeof v === 'object' && !Array.isArray(v);
-}
-
 function normalizeRole(input: unknown): UserRole | null {
     const val = String(input || '').toLowerCase();
     if (val === 'superadmin' || val === 'tenant_admin' || val === 'supervisor' || val === 'agent') return val;
@@ -59,45 +55,6 @@ function ensureUuid(id: string) {
     if (!UUID_RE.test(id)) {
         throw new Error('campaign id must be a valid UUID');
     }
-}
-
-function normalizeChannelList(v: unknown): string[] {
-    if (!Array.isArray(v)) return [];
-    const dedup = new Set<string>();
-    for (const raw of v) {
-        const item = String(raw || '').trim().toLowerCase();
-        if (!item || !CHANNELS.has(item)) continue;
-        dedup.add(item);
-    }
-    return Array.from(dedup.values());
-}
-
-function normalizeOpsSettings(raw: unknown) {
-    const base = isObject(raw) ? raw : {};
-    const primary = String(base.primary_channel || '').trim().toLowerCase();
-    const enabledFromInput = normalizeChannelList(base.enabled_channels);
-    const enabled = enabledFromInput.length > 0 ? enabledFromInput : primary ? [primary] : ['whatsapp'];
-    const primaryChannel = CHANNELS.has(primary) ? primary : enabled[0] || 'whatsapp';
-    const handoff = isObject(base.handoff) ? base.handoff : {};
-    const flags = isObject(base.flags) ? base.flags : {};
-
-    return {
-        primary_channel: primaryChannel,
-        enabled_channels: enabled,
-        handoff: {
-            enabled: handoff.enabled === true,
-            trigger: String(handoff.trigger || 'intent_or_no_response').trim() || 'intent_or_no_response',
-            sla_minutes:
-                handoff.sla_minutes == null || Number.isNaN(Number(handoff.sla_minutes))
-                    ? null
-                    : Math.max(1, Math.min(180, Number(handoff.sla_minutes))),
-        },
-        flags: {
-            outbound_enabled: flags.outbound_enabled !== false,
-            auto_assign: flags.auto_assign === true,
-            human_override: flags.human_override !== false,
-        },
-    };
 }
 
 function authHeaders(token: string) {
@@ -215,7 +172,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
         if (Object.prototype.hasOwnProperty.call(body, 'primary_channel')) {
             const nextPrimary = String(body.primary_channel || '').trim().toLowerCase();
-            if (!CHANNELS.has(nextPrimary)) return json(400, { error: 'primary_channel inválido' });
+            if (!CHANNEL_SET.has(nextPrimary)) return json(400, { error: 'primary_channel inválido' });
             nextOps.primary_channel = nextPrimary;
             if (!nextOps.enabled_channels.includes(nextPrimary)) {
                 nextOps.enabled_channels = [nextPrimary, ...nextOps.enabled_channels];

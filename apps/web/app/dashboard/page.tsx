@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DonutResultChart, CallsTrendChart } from "./DashboardCharts";
 import { sbFetch } from "@/lib/supabaseRest";
 import { useTenant } from "@/lib/tenant/use-tenant"; // ✅ Corrected path
+import { ErrorState, LoadingState } from "@/components/ui/feedback-state";
 
 // -------------------- Types --------------------
 type CampaignOption = {
@@ -1314,12 +1315,13 @@ export default function AapDashboardPage() {
                 )}
             </div>
 
-            {loading && <div className="rounded-xl border p-4 text-sm text-muted-foreground">Cargando métricas…</div>}
+            {loading && <LoadingState label="Cargando métricas operativas..." />}
 
             {error && (
-                <div className="rounded-xl border p-4 text-sm text-red-600">
-                    Error: {error}
-                </div>
+                <ErrorState
+                    title="No pudimos actualizar el dashboard"
+                    description={`Puedes reintentar la carga o cambiar filtros. Detalle técnico: ${error}`}
+                />
             )}
 
             {!loading && !error && (

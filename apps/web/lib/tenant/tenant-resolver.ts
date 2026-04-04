@@ -27,12 +27,22 @@ type TenantUserRow = {
   is_primary?: boolean;
 };
 
-function pickEnv(...keys: string[]) {
-  for (const k of keys) {
-    const v = (process.env[k] || '').trim();
-    if (v) return v;
-  }
-  return '';
+type MembershipItem = {
+  tenant_id: string;
+  role: UserRole | null;
+  is_primary?: boolean;
+};
+
+function getSupabaseBaseUrl() {
+  const pub = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const server = (process.env.SUPABASE_URL || '').trim();
+  return (pub || server).replace(/\/$/, '');
+}
+
+function getSupabaseAnonKey() {
+  const pub = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+  const server = (process.env.SUPABASE_ANON_KEY || '').trim();
+  return pub || server;
 }
 
 function parseBooleanFlag(raw: string, defaultValue: boolean): boolean {
@@ -122,7 +132,7 @@ async function fetchCurrentUserFromAuth(
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        apikey: pickEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY'),
+        apikey: getSupabaseAnonKey(),
       },
       cache: 'no-store',
     });
@@ -144,7 +154,7 @@ async function fetchMyTenantContext(
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        apikey: pickEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY'),
+        apikey: getSupabaseAnonKey(),
         Accept: 'application/json',
         'Content-Type': 'application/json',
         'Accept-Profile': 'platform_core',
@@ -165,6 +175,72 @@ async function fetchMyTenantContext(
   }
 }
 
+async function fetchPrimaryTenantUserRow(
+  baseUrl: string,
+  accessToken: string,
+  userId: string,
+  fetchImpl: typeof fetch
+): Promise<TenantUserRow | null> {
+  try {
+    const q = new URLSearchParams({
+      select: 'tenant_id,role,is_primary',
+      user_id: `eq.${userId}`,
+      is_primary: 'is.true',
+      order: 'is_primary.desc',
+      limit: '1',
+    });
+
+    const res = await fetchImpl(`${baseUrl}/rest/v1/tenant_users?${q.toString()}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        apikey: getSupabaseAnonKey(),
+        Accept: 'application/json',
+        'Accept-Profile': 'platform_core',
+      },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) return null;
+    const payload = (await res.json()) as TenantUserRow[] | null;
+    return Array.isArray(payload) ? payload[0] ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchTenantFromAppApi(
+  accessToken: string,
+  fetchImpl: typeof fetch
+): Promise<TenantUserRow | null> {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const res = await fetchImpl('/api/tenant/memberships/', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+    });
+
+    if (!res.ok) return null;
+    const payload = (await res.json()) as { items?: MembershipItem[] };
+    const items = Array.isArray(payload?.items) ? payload.items : [];
+    const primary = items.find((it) => it?.is_primary) || items[0] || null;
+    if (!primary?.tenant_id) return null;
+
+    return {
+      tenant_id: String(primary.tenant_id),
+      role: (primary.role || null) as UserRole | null,
+      is_primary: Boolean(primary.is_primary),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resuelve el contexto del tenant del usuario actual priorizando sesión/autenticación real.
  * Orden:
@@ -175,7 +251,7 @@ async function fetchMyTenantContext(
 export async function resolveTenantContext(userSession?: any, opts?: ResolveTenantOptions): Promise<TenantContext> {
   const fallbackEnabled = resolveFallbackEnabled(opts);
   const fetchImpl = opts?.fetchImpl ?? fetch;
-  const baseUrl = pickEnv('NEXT_PUBLIC_SUPABASE_URL', 'SUPABASE_URL').replace(/\/$/, '');
+  const baseUrl = getSupabaseBaseUrl();
   const sessionFromInput = tryReadTenantFromSession(userSession);
 
   if (baseUrl) {
@@ -191,6 +267,26 @@ export async function resolveTenantContext(userSession?: any, opts?: ResolveTena
           const role = normalizeRole(tenantUser.role || sessionFromInput.role);
           return {
             tenantId: tenantUser.tenant_id,
+            role,
+            isSuperAdmin: role === 'superadmin',
+          };
+        }
+
+        const primaryTenantRow = await fetchPrimaryTenantUserRow(baseUrl, token, userId, fetchImpl);
+        if (primaryTenantRow?.tenant_id) {
+          const role = normalizeRole(primaryTenantRow.role || sessionFromInput.role);
+          return {
+            tenantId: primaryTenantRow.tenant_id,
+            role,
+            isSuperAdmin: role === 'superadmin',
+          };
+        }
+
+        const appMembership = await fetchTenantFromAppApi(token, fetchImpl);
+        if (appMembership?.tenant_id) {
+          const role = normalizeRole(appMembership.role || sessionFromInput.role);
+          return {
+            tenantId: appMembership.tenant_id,
             role,
             isSuperAdmin: role === 'superadmin',
           };
@@ -223,6 +319,21 @@ export async function resolveTenantContext(userSession?: any, opts?: ResolveTena
       role: sessionFromInput.role,
       isSuperAdmin: sessionFromInput.role === 'superadmin',
     };
+  }
+
+  if (baseUrl) {
+    const lateToken = typeof opts?.accessToken === 'string' ? opts.accessToken : readAccessTokenFromLocalStorage();
+    if (lateToken) {
+      const appMembership = await fetchTenantFromAppApi(lateToken, fetchImpl);
+      if (appMembership?.tenant_id) {
+        const role = normalizeRole(appMembership.role || sessionFromInput.role);
+        return {
+          tenantId: appMembership.tenant_id,
+          role,
+          isSuperAdmin: role === 'superadmin',
+        };
+      }
+    }
   }
 
   if (!fallbackEnabled) {

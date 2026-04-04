@@ -5,6 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sbFetch } from "@/lib/supabaseRest";
 import React from "react";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback-state";
 
 type Lead = {
     id: string;
@@ -503,9 +504,17 @@ function LeadViewInner() {
         return arr.find((c) => normStatus(c.status) === "completed") ?? null;
     }, [calls]);
 
-    if (loading) return <div className="p-6">Cargando…</div>;
-    if (error) return <div className="p-6 text-red-600">Error: {error}</div>;
-    if (!lead) return <div className="p-6">Lead no encontrado.</div>;
+    if (loading) return <LoadingState className="m-6" label="Cargando detalle del lead..." />;
+    if (error) return <ErrorState title="No pudimos abrir este lead" description={error} className="m-6" />;
+    if (!lead) {
+        return (
+            <EmptyState
+                title="Este lead no está disponible"
+                description="Verifica el identificador o vuelve al listado para seleccionar otro lead."
+                className="m-6"
+            />
+        );
+    }
 
     const campaignLabel =
         (lead.campaign_name && lead.campaign_name.trim()) ||
@@ -537,6 +546,12 @@ function LeadViewInner() {
                 </div>
 
                 <div className="flex gap-2">
+                    <Link
+                        href={`/leads/workspace?leadId=${encodeURIComponent(lead.id)}`}
+                        className="px-3 py-2 rounded-lg border hover:bg-muted"
+                    >
+                        Omnichannel Workspace
+                    </Link>
                     <button
                         disabled={!!calling}
                         onClick={() => startCall("human")}
@@ -708,7 +723,10 @@ function LeadViewInner() {
                     ) : timelineError ? (
                         <div className="text-sm text-red-600">{timelineError}</div>
                     ) : !timeline.length ? (
-                        <div className="text-sm text-muted-foreground">Sin eventos para este lead.</div>
+                        <EmptyState
+                            title="Aún no hay eventos en el timeline"
+                            description="Este lead todavía no registra actividad de operación en el historial."
+                        />
                     ) : (
                         <div className="space-y-2">
                             {timeline.map((ev) => (
@@ -763,8 +781,11 @@ function LeadViewInner() {
 
                             {calls.length === 0 && (
                                 <tr>
-                                    <td className="p-6 text-center text-muted-foreground" colSpan={6}>
-                                        Aún no hay llamadas generadas para este lead.
+                                    <td className="p-6" colSpan={6}>
+                                        <EmptyState
+                                            title="No hay llamadas registradas todavía"
+                                            description="Puedes iniciar una llamada humana o IA desde los botones superiores."
+                                        />
                                     </td>
                                 </tr>
                             )}

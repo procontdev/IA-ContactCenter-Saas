@@ -5,6 +5,8 @@ import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { sbFetch } from "@/lib/supabaseRest";
 import { useTenant } from "@/lib/tenant/use-tenant";
+import { resolveLeadPlaybook } from "@/lib/leads/playbooks";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback-state";
 
 type Lead = {
     id: string;
@@ -63,6 +65,13 @@ type WowInsight = {
 
     priority: "P1" | "P2" | "P3" | null;
     sla_due_at: string | null;
+    sla_status?: "no_sla" | "on_time" | "due_soon" | "overdue" | null;
+    sla_is_escalated?: boolean | null;
+    sla_escalation_level?: "none" | "warning" | "critical" | null;
+    work_status?: "queued" | "assigned" | "in_progress" | "done" | null;
+    work_assignee_user_id?: string | null;
+    work_assignee_label?: string | null;
+    human_takeover_status?: "none" | "taken" | "released" | "closed" | null;
 
     next_best_action: string | null;
 
@@ -277,14 +286,27 @@ async function fetchWowInsight(leadId: string, tenantId?: string) {
             tenantId,
             query: {
                 select:
-                    "id,campaign_id,campaign,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons",
+                    "id,campaign_id,campaign,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,work_status,work_assignee_user_id,work_assignee_label,human_takeover_status,next_best_action,quality_flags,spam_flags,lead_score_reasons",
                 id: `eq.${leadId}`,
                 limit: 1,
             },
         });
         return v?.[0] ?? null;
     } catch {
-        return null;
+        try {
+            const legacy = await sbFetch<WowInsight[]>("/rest/v1/v_leads_wow_queue", {
+                tenantId,
+                query: {
+                    select:
+                        "id,campaign_id,campaign,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons",
+                    id: `eq.${leadId}`,
+                    limit: 1,
+                },
+            });
+            return legacy?.[0] ?? null;
+        } catch {
+            return null;
+        }
     }
 }
 
@@ -536,9 +558,33 @@ function LeadWowViewInner() {
         return arr.find((c) => normStatus(c.status) === "completed") ?? null;
     }, [calls]);
 
-    if (loading) return <div className="p-6">Cargando…</div>;
-    if (error) return <div className="p-6 text-red-600">Error: {error}</div>;
-    if (!lead) return <div className="p-6">Lead no encontrado.</div>;
+    const playbook = React.useMemo(() => {
+        if (!wow) return null;
+        return resolveLeadPlaybook({
+            next_best_action: wow.next_best_action,
+            priority: wow.priority,
+            sla_status: wow.sla_status,
+            sla_is_escalated: wow.sla_is_escalated,
+            sla_escalation_level: wow.sla_escalation_level,
+            work_status: wow.work_status,
+            human_takeover_status: wow.human_takeover_status,
+            lead_temperature: wow.lead_temperature,
+            work_assignee_user_id: wow.work_assignee_user_id,
+            work_assignee_label: wow.work_assignee_label,
+        });
+    }, [wow]);
+
+    if (loading) return <LoadingState className="m-6" label="Cargando detalle WOW del lead..." />;
+    if (error) return <ErrorState title="No pudimos abrir este lead WOW" description={error} className="m-6" />;
+    if (!lead) {
+        return (
+            <EmptyState
+                title="Este lead no está disponible"
+                description="Vuelve a la cola WOW y selecciona otro lead para continuar."
+                className="m-6"
+            />
+        );
+    }
 
     const campaignLabel =
         (lead.campaign_name && lead.campaign_name.trim()) ||
@@ -586,6 +632,12 @@ function LeadWowViewInner() {
                 </div>
 
                 <div className="flex gap-2">
+                    <Link
+                        href={`/leads/workspace?leadId=${encodeURIComponent(lead.id)}`}
+                        className="px-3 py-2 rounded-lg border hover:bg-muted"
+                    >
+                        Omnichannel Workspace
+                    </Link>
                     <button
                         disabled={!!calling}
                         onClick={() => startCall("human")}
@@ -660,6 +712,30 @@ function LeadWowViewInner() {
                                 <b>Next Best Action:</b> {wow.next_best_action ?? "-"}
                             </div>
 
+                            {playbook ? (
+                                <div className="rounded-md border p-3 space-y-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="text-sm font-semibold">{playbook.title}</div>
+                                        <span className={`inline-flex items-center border rounded-full px-2 py-0.5 text-xs ${playbook.severity === "critical" ? "border-red-300 text-red-700" : playbook.severity === "warning" ? "border-amber-300 text-amber-700" : "border-slate-300 text-slate-700"}`}>
+                                            {playbook.severity}
+                                        </span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">{playbook.summary}</div>
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        {playbook.actions.map((action) => (
+                                            <span key={action.id} className="inline-flex items-center border rounded-full px-2 py-0.5 text-xs">
+                                                {action.label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <div className="text-xs">
+                                        <Link className="underline" href="/leads/desk">
+                                            Ejecutar acciones en Human Desk
+                                        </Link>
+                                    </div>
+                                </div>
+                            ) : null}
+
                             <details className="mt-2">
                                 <summary className="cursor-pointer select-none underline text-sm">
                                     Ver razones del score
@@ -728,9 +804,12 @@ function LeadWowViewInner() {
                     {timelineLoading ? (
                         <div className="text-sm text-muted-foreground">Cargando timeline…</div>
                     ) : timelineError ? (
-                        <div className="text-sm text-red-600">{timelineError}</div>
+                        <ErrorState title="No pudimos cargar el timeline" description={timelineError} className="p-3" />
                     ) : !timeline.length ? (
-                        <div className="text-sm text-muted-foreground">Sin eventos para este lead.</div>
+                        <EmptyState
+                            title="Aún no hay eventos en el timeline"
+                            description="Este lead todavía no registra actividad de operación en el historial."
+                        />
                     ) : (
                         <div className="space-y-2">
                             {timeline.map((ev) => (
@@ -794,8 +873,11 @@ function LeadWowViewInner() {
 
                             {calls.length === 0 && (
                                 <tr>
-                                    <td className="p-6 text-center text-muted-foreground" colSpan={6}>
-                                        Aún no hay llamadas generadas para este lead.
+                                    <td className="p-6" colSpan={6}>
+                                        <EmptyState
+                                            title="No hay llamadas registradas todavía"
+                                            description="Puedes iniciar una llamada humana o IA desde los botones superiores."
+                                        />
                                     </td>
                                 </tr>
                             )}

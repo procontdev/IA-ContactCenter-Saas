@@ -97,7 +97,7 @@ export async function GET(req: Request) {
         const selectWithWorkQueue =
             "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,quality_flags,spam_flags,lead_score_reasons,work_queue,work_status,work_assignee_user_id,work_assignee_label,work_assigned_at,human_takeover_status,human_takeover_by_user_id,human_takeover_by_label,human_takeover_at,human_takeover_released_at,human_takeover_closed_at";
         const selectLegacy =
-            "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,sla_status,sla_is_escalated,sla_escalation_level,sla_escalated_at,sla_last_evaluated_at,next_best_action,quality_flags,spam_flags,lead_score_reasons";
+            "id,campaign_id,campaign,form_id,created_at,phone,phone_norm,lead_score,lead_temperature,priority,sla_due_at,next_best_action,quality_flags,spam_flags,lead_score_reasons";
         params.set("select", selectWithWorkQueue);
         params.set("limit", String(limit));
         params.set("offset", String(offset));
@@ -117,8 +117,10 @@ export async function GET(req: Request) {
             const details = await res.text().catch(() => "");
             const missingWorkQueueColumns =
                 details.includes("work_queue") && details.includes("does not exist");
+            const missingSlaViewColumns =
+                details.includes("v_leads_wow_queue") && details.includes("sla_status") && details.includes("does not exist");
 
-            if (missingWorkQueueColumns) {
+            if (missingWorkQueueColumns || missingSlaViewColumns) {
                 params.set("select", selectLegacy);
                 endpoint = `${base}?${params.toString()}`;
                 usedLegacySelect = true;

@@ -976,6 +976,11 @@ export default function HandoffsPage() {
                                         <Link className="underline" href={`/lead?id=${r.lead_id}`}>
                                             Ver lead
                                         </Link>
+                                        {r.lead_id ? (
+                                            <Link className="underline" href={`/leads/workspace?leadId=${encodeURIComponent(r.lead_id)}&callId=${encodeURIComponent(r.id)}`}>
+                                                Workspace
+                                            </Link>
+                                        ) : null}
                                     </td>
                                 </tr>
                             );

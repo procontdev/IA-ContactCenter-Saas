@@ -3,12 +3,32 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getValidSession, signInWithPassword } from "@/lib/auth/supabase-auth";
+import { ErrorState, LoadingState } from "@/components/ui/feedback-state";
 
 function sanitizeNext(nextPath: string | null) {
     const raw = String(nextPath || "").trim();
     if (!raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
     if (raw.startsWith("/login")) return "/dashboard";
     return raw;
+}
+
+function toFriendlyLoginError(error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    const normalized = String(message || "").toLowerCase();
+
+    if (
+        normalized.includes("invalid login") ||
+        normalized.includes("invalid credentials") ||
+        normalized.includes("invalid_grant")
+    ) {
+        return "No pudimos validar tus credenciales. Revisa email y contraseña e inténtalo nuevamente.";
+    }
+
+    if (normalized.includes("network") || normalized.includes("fetch")) {
+        return "No pudimos conectar con el servicio de autenticación. Revisa tu conexión e inténtalo otra vez.";
+    }
+
+    return "No se pudo iniciar sesión en este momento. Vuelve a intentarlo en unos segundos.";
 }
 
 export default function LoginPage() {
@@ -57,7 +77,7 @@ export default function LoginPage() {
             await signInWithPassword(email.trim().toLowerCase(), password);
             router.replace(nextPath);
         } catch (e) {
-            setError(e instanceof Error ? e.message : "No se pudo iniciar sesión");
+            setError(toFriendlyLoginError(e));
         } finally {
             setLoading(false);
         }
@@ -66,7 +86,7 @@ export default function LoginPage() {
     if (checking) {
         return (
             <div className="min-h-screen grid place-items-center p-6 bg-slate-50">
-                <div className="text-sm text-muted-foreground">Validando sesión...</div>
+                <LoadingState label="Validando tu sesión..." className="w-full max-w-md" />
             </div>
         );
     }
@@ -77,6 +97,7 @@ export default function LoginPage() {
                 <div>
                     <h1 className="text-xl font-semibold">Ingresar</h1>
                     <p className="text-sm text-muted-foreground">Accede con tu cuenta para operar en tu organización.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Entorno activo: eventprolabs</p>
                 </div>
 
                 <form className="space-y-3" onSubmit={onSubmit}>
@@ -106,10 +127,10 @@ export default function LoginPage() {
                         />
                     </label>
 
-                    {error ? <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">{error}</div> : null}
+                    {error ? <ErrorState title="No pudimos iniciar tu sesión" description={error} className="text-xs" /> : null}
 
                     <button type="submit" className="w-full rounded-md border px-3 py-2 text-sm hover:bg-muted disabled:opacity-60" disabled={loading}>
-                        {loading ? "Ingresando..." : "Ingresar"}
+                        {loading ? "Ingresando..." : "Ingresar al workspace"}
                     </button>
                 </form>
             </div>

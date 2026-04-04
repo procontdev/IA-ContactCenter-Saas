@@ -187,9 +187,12 @@ export default function LeadsPage() {
                             : "Últimos leads + leads fijados (demo)"}
                     </p>
                 </div>
-                <a href="/leads/wow" className="rounded-md border px-3 py-2 text-sm">
+                <Link href="/leads/wow" className="rounded-md border px-3 py-2 text-sm">
                     🔥 Cola priorizada (WOW)
-                </a>
+                </Link>
+                <Link href="/leads/desk" className="rounded-md border px-3 py-2 text-sm">
+                    🧑‍💼 Human Desk
+                </Link>
 
                 <div className="flex items-center gap-2">
                     <label className="text-sm text-muted-foreground" htmlFor="campaign">

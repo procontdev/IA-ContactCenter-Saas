@@ -1,5 +1,6 @@
 // app/api/aap/campaigns/list/route.ts
 import { NextResponse } from "next/server";
+import { resolveTenantFromRequest } from "../../../lib/tenant/tenant-request";
 
 function env(name: string, required = true) {
     const v = (process.env[name] || "").trim();
@@ -11,8 +12,9 @@ function json(status: number, body: any) {
     return NextResponse.json(body, { status });
 }
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
+        const tenant = await resolveTenantFromRequest(req);
         const SUPABASE_URL = env("NEXT_PUBLIC_SUPABASE_URL");
         const key =
             (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -21,13 +23,19 @@ export async function GET() {
 
         if (!key) throw new Error("Missing env var: SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)");
 
-        const PROFILE = "demo_callcenter";
+        const PROFILE = "contact_center";
 
-        // Si tu tabla campaigns está en schema demo_callcenter y PostgREST expone ese schema con Accept-Profile,
+        // Si tu tabla campaigns está en schema contact_center y PostgREST expone ese schema con Accept-Profile,
         // esto funcionará directo.
         const base = `${SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/campaigns`;
-        const endpoint =
-            `${base}?select=id,code,name,is_active&is_active=eq.true&order=name.asc`;
+        const params = new URLSearchParams();
+        params.set("select", "id,code,name,is_active");
+        params.set("is_active", "eq.true");
+        params.set("order", "name.asc");
+        if (!tenant.isSuperAdmin) {
+            params.set("tenant_id", `eq.${tenant.tenantId}`);
+        }
+        const endpoint = `${base}?${params.toString()}`;
 
         const headers = new Headers();
         headers.set("Accept-Profile", PROFILE);

@@ -1,5 +1,6 @@
 // app/api/aap/leads/wow-campaigns/route.ts
 import { NextResponse } from "next/server";
+import { resolveTenantFromRequest } from "../../../../../lib/tenant/tenant-request";
 
 function env(name: string, required = true) {
     const v = (process.env[name] || "").trim();
@@ -17,8 +18,9 @@ type CampaignOption = {
     name: string | null;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
+        const tenant = await resolveTenantFromRequest(req);
         const SUPABASE_URL = env("NEXT_PUBLIC_SUPABASE_URL");
         const key =
             (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -28,12 +30,18 @@ export async function GET() {
 
         if (!key) throw new Error("Missing SUPABASE key (ANON o SERVICE ROLE)");
 
-        // 👇 IMPORTANTE: tu schema real
-        const PROFILE = "demo_callcenter";
+        // 👇 schema operativo real en SaaS
+        const PROFILE = "contact_center";
 
-        // Esta vista existe dentro del schema demo_callcenter
+        // Esta vista existe dentro del schema contact_center
         const base = `${SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/v_leads_wow_queue`;
-        const endpoint = `${base}?select=campaign_id,campaign&limit=10000`;
+        const params = new URLSearchParams();
+        params.set("select", "campaign_id,campaign");
+        params.set("limit", "10000");
+        if (!tenant.isSuperAdmin) {
+            params.set("tenant_id", `eq.${tenant.tenantId}`);
+        }
+        const endpoint = `${base}?${params.toString()}`;
 
         const headers = new Headers();
         headers.set("Accept-Profile", PROFILE); // ✅ CLAVE: evita que busque en public

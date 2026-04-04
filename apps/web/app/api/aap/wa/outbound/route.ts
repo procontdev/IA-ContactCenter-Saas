@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveTenantFromRequest } from "../../../../../lib/tenant/tenant-request";
 
 function jsonOk(data: any, init?: ResponseInit) {
     return NextResponse.json(data, { status: 200, ...init });
@@ -17,6 +18,7 @@ const cleanDigits = (v: any) => String(v ?? "").replace(/@.*$/, "").replace(/\D/
 
 export async function POST(req: Request) {
     try {
+        const tenant = await resolveTenantFromRequest(req);
         const N8N_WA_OUTBOUND_URL = getEnv("N8N_WA_OUTBOUND_URL", true);
         const EVOLUTION_APIKEY = getEnv("EVOLUTION_APIKEY", true);
 
@@ -34,7 +36,16 @@ export async function POST(req: Request) {
         if (!to) return jsonErr("to requerido");
         if (!text) return jsonErr("text requerido");
 
-        const payload = { call_id, agent_id, instance, to, text, raw, apikey: EVOLUTION_APIKEY };
+        const payload = {
+            call_id,
+            agent_id,
+            instance,
+            to,
+            text,
+            raw,
+            tenant_id: tenant.tenantId,
+            apikey: EVOLUTION_APIKEY,
+        };
 
         const res = await fetch(N8N_WA_OUTBOUND_URL, {
             method: "POST",

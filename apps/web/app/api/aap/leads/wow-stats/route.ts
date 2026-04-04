@@ -43,6 +43,7 @@ export async function GET(req: Request) {
 
         const PROFILE = "contact_center";
         const base = `${SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/v_leads_wow_queue`;
+        const baseLeads = `${SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/leads`;
 
         const headers = new Headers();
         headers.set("Accept-Profile", PROFILE);
@@ -99,8 +100,8 @@ export async function GET(req: Request) {
             return sp;
         };
 
-        const countBy = async (params: URLSearchParams) => {
-            const endpoint = `${base}?${params.toString()}`;
+        const countBy = async (params: URLSearchParams, endpointBase = base) => {
+            const endpoint = `${endpointBase}?${params.toString()}`;
             const res = await fetch(endpoint, { headers, cache: "no-store" });
             if (!res.ok) {
                 const txt = await res.text().catch(() => "");
@@ -119,8 +120,15 @@ export async function GET(req: Request) {
 
         // SLA vencido (respeta filtros actuales, incluido temperature si está seleccionado)
         const slaVencido = await countBy(buildParams({ includeTempFilter: true, slaOverdue: true }));
-        const slaDueSoon = await countBy(buildParams({ includeTempFilter: true, slaStatus: 'due_soon' }));
-        const slaEscalated = await countBy(buildParams({ includeTempFilter: true, escalatedOnly: true }));
+        const slaDueSoonParams = buildParams({ includeTempFilter: true });
+        const nowIso = new Date().toISOString();
+        const soonIso = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        slaDueSoonParams.set('and', `(sla_due_at.gte.${nowIso},sla_due_at.lte.${soonIso})`);
+
+        const slaEscalatedParams = buildParams({ includeTempFilter: true, escalatedOnly: true });
+
+        const slaDueSoon = await countBy(slaDueSoonParams, baseLeads);
+        const slaEscalated = await countBy(slaEscalatedParams, baseLeads);
 
         // 🔥 Respuesta ultra-compatible (por si el UI espera distintos nombres)
         return json(200, {

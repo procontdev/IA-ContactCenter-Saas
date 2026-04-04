@@ -177,7 +177,7 @@ async function main() {
                     source: 'meta_ads_retry',
                     origin: 'landing_form_retry',
                     channel: 'web',
-                    phone,
+                    phone: '988777666',
                     email,
                     metadata: { smoke: true, lane: 'lead-dedup-second' },
                 },
@@ -194,7 +194,7 @@ async function main() {
         second.body
     );
 
-    let persistedRes = await reqJson(
+    const persistedRes = await reqJson(
         `${supabaseUrl}/rest/v1/leads?select=id,tenant_id,campaign_id,phone_norm,email_norm,raw&` +
         `id=eq.${encodeURIComponent(leadA.id)}&limit=1`,
         {
@@ -207,35 +207,20 @@ async function main() {
         }
     );
 
-    const emailNormUnsupported =
-        !persistedRes.ok && String(persistedRes.body?.message || '').toLowerCase().includes('email_norm');
-
-    if (emailNormUnsupported) {
-        persistedRes = await reqJson(
-            `${supabaseUrl}/rest/v1/leads?select=id,tenant_id,campaign_id,phone_norm,raw&` +
-            `id=eq.${encodeURIComponent(leadA.id)}&limit=1`,
-            {
-                method: 'GET',
-                headers: {
-                    apikey: anonKey,
-                    Authorization: `Bearer ${adminToken}`,
-                    'Accept-Profile': 'contact_center',
-                },
-            }
-        );
-    }
     const rows = Array.isArray(persistedRes.body) ? persistedRes.body : [];
     const mergedRow = rows.find((r) => r.id === leadA.id);
+    const dedupLastMatchBy = mergedRow?.raw?.intake?.metadata?.dedup?.matched_by;
     expect(
         persistedRes.ok
         && rows.length === 1
         && mergedRow
         && mergedRow.tenant_id === campaign.tenant_id
         && mergedRow.campaign_id === campaign.id
-        && (emailNormUnsupported || mergedRow.email_norm === email.toLowerCase())
+        && mergedRow.email_norm === email.toLowerCase()
         && Array.isArray(mergedRow.raw?.intake_history)
-        && mergedRow.raw.intake_history.length >= 2,
-        'persistencia confirma no duplicación, tenant/campaign correctos y trazabilidad de intake',
+        && mergedRow.raw.intake_history.length >= 2
+        && dedupLastMatchBy === 'email_norm',
+        'persistencia confirma no duplicación, tenant/campaign correctos, email_norm y lookup por email',
         persistedRes.body
     );
 

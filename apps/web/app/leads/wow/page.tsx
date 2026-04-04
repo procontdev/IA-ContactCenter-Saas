@@ -2,6 +2,7 @@
 import { Suspense } from "react";
 import LeadsWowQueueClient from "./wow-client";
 import Link from "next/link";
+import { LoadingState } from "@/components/ui/feedback-state";
 
 export default function LeadsWowPage() {
     return (
@@ -14,12 +15,17 @@ export default function LeadsWowPage() {
                     </p>
                 </div>
 
-                <Link className="text-sm underline" href="/leads">
-                    Volver al listado crudo
-                </Link>
+                <div className="flex gap-3 text-sm">
+                    <Link className="underline" href="/leads/desk">
+                        Abrir Human Desk
+                    </Link>
+                    <Link className="underline" href="/leads">
+                        Volver al listado crudo
+                    </Link>
+                </div>
             </div>
 
-            <Suspense fallback={<div className="text-sm text-muted-foreground">Cargando cola...</div>}>
+            <Suspense fallback={<LoadingState label="Cargando cola WOW..." />}>
                 <LeadsWowQueueClient />
             </Suspense>
         </div>
