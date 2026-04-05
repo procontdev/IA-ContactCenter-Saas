@@ -1,0 +1,84 @@
+{
+  "generatedAt": "2026-04-05T18:21:25.189Z",
+  "status": "PASS",
+  "pack": "AB",
+  "durationMs": 15461,
+  "summary": {
+    "totalChecks": 8,
+    "passed": 8,
+    "warnings": 0,
+    "failed": 0
+  },
+  "env": {
+    "required": [
+      "APP_BASE_URL",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "SMOKE_EMAIL",
+      "SMOKE_PASSWORD",
+      "SMOKE_BASIC_TENANT_ID",
+      "SMOKE_PRO_TENANT_ID",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "DEMO_ADMIN_EMAIL",
+      "DEMO_ADMIN_PASSWORD"
+    ],
+    "recommended": [
+      "SMOKE_BASIC_TENANT_SLUG",
+      "SMOKE_PRO_TENANT_SLUG",
+      "SMOKE_API_BASE_URL"
+    ],
+    "optional": [
+      "ALLOW_CRITICAL_SKIP"
+    ],
+    "missingRequired": [],
+    "missingRecommended": [],
+    "missingOptional": [
+      "ALLOW_CRITICAL_SKIP"
+    ]
+  },
+  "checks": [
+    {
+      "id": "reachability.app",
+      "status": "PASS",
+      "detail": "APP reachable (200, 111ms)."
+    },
+    {
+      "id": "reachability.supabase",
+      "status": "PASS",
+      "detail": "Supabase reachable (200, 586ms)."
+    },
+    {
+      "id": "tenants.resolve",
+      "status": "PASS",
+      "detail": "Tenant IDs resueltos correctamente (por ID o slug)."
+    },
+    {
+      "id": "env.required",
+      "status": "PASS",
+      "detail": "Variables obligatorias presentes."
+    },
+    {
+      "id": "env.recommended",
+      "status": "PASS",
+      "detail": "Variables recomendadas presentes."
+    },
+    {
+      "id": "dataset.demo",
+      "status": "PASS",
+      "detail": "Dataset demo válido (9161ms)."
+    },
+    {
+      "id": "gating.basic",
+      "status": "PASS",
+      "detail": "Gating básico compatible (manager-view status 200)."
+    },
+    {
+      "id": "drift.pack",
+      "status": "PASS",
+      "detail": "Sin drift crítico de prerequisitos para pack AB."
+    }
+  ],
+  "warnings": [],
+  "failures": [],
+  "actionable": []
+}

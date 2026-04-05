@@ -1,0 +1,84 @@
+{
+  "generatedAt": "2026-04-05T18:23:35.623Z",
+  "summary": {
+    "pack": "AB",
+    "total": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 85762
+  },
+  "failedCritical": [],
+  "results": [
+    {
+      "id": "release-readiness",
+      "label": "release readiness base",
+      "script": "scripts/smoke-release-readiness.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 190,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-plans",
+      "label": "packaging plans / gating",
+      "script": "scripts/smoke-packaging-plans.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 14612,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "billing-subscription",
+      "label": "billing subscription scaffolding",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 15440,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "lead-automation-triggers",
+      "label": "lead automation triggers",
+      "script": "scripts/smoke-lead-automation-triggers.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 10263,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-limits-guardrails",
+      "label": "packaging limits guardrails",
+      "script": "scripts/smoke-packaging-limits-guardrails.js",
+      "critical": false,
+      "status": "PASS",
+      "durationMs": 17808,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "campaign-onboarding",
+      "label": "campaign onboarding",
+      "script": "scripts/smoke-campaign-onboarding.js",
+      "critical": false,
+      "status": "PASS",
+      "durationMs": 5722,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "campaign-settings",
+      "label": "campaign settings",
+      "script": "scripts/smoke-campaign-settings.js",
+      "critical": false,
+      "status": "PASS",
+      "durationMs": 6123,
+      "exitCode": 0,
+      "reason": ""
+    }
+  ]
+}

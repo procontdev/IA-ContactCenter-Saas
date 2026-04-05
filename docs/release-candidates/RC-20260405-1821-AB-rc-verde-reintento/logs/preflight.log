@@ -1,0 +1,15 @@
+RC_ID: RC-20260405-1821-AB-rc-verde-reintento
+timestamp_utc: 2026-04-05T18:21:25Z
+command: node scripts/preflight-release-candidate.js --pack AB --jsonOut .tmp/preflight-release-RC-20260405-1821-AB-rc-verde-reintento.json
+status: PASS
+summary: total=8 passed=8 warnings=0 failed=0
+
+checks:
+- reachability.app: PASS
+- reachability.supabase: PASS
+- tenants.resolve: PASS (IDs resueltos por ID o slug)
+- env.required: PASS
+- env.recommended: PASS
+- dataset.demo: PASS
+- gating.basic: PASS
+- drift.pack: PASS

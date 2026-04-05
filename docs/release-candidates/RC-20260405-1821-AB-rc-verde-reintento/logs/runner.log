@@ -1,0 +1,14 @@
+RC_ID: RC-20260405-1821-AB-rc-verde-reintento
+timestamp_utc: 2026-04-05T18:23:35Z
+command: node scripts/run-release-smokes.js --pack AB --jsonOut .tmp/release-smokes-RC-20260405-1821-AB-rc-verde-reintento.json
+status: PASS
+summary: total=7 passed=7 failed=0 skipped=0 durationMs=85762
+
+results:
+- release-readiness (critical): PASS
+- packaging-plans (critical): PASS
+- billing-subscription (critical): PASS
+- lead-automation-triggers (critical): PASS
+- packaging-limits-guardrails (non-critical): PASS
+- campaign-onboarding (non-critical): PASS
+- campaign-settings (non-critical): PASS
