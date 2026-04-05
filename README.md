@@ -138,15 +138,8 @@ Ejemplo: `RC-20260405-1530-AB-billing-hardening`
 # definir RC_ID (UTC recomendado)
 set RC_ID=RC-20260405-1530-AB-billing-hardening
 
-# preparar carpeta de corrida
-mkdir docs\release-candidates\%RC_ID%
-mkdir docs\release-candidates\%RC_ID%\logs
-mkdir docs\release-candidates\%RC_ID%\notes
-
-# copiar templates
-copy docs\release-candidates\templates\rc-acta-template.md docs\release-candidates\%RC_ID%\rc-acta.md
-copy docs\release-candidates\templates\pack-c-manual-checklist-template.md docs\release-candidates\%RC_ID%\pack-c-manual-checklist.md
-copy docs\release-candidates\templates\evidence-manifest-template.json docs\release-candidates\%RC_ID%\evidence-manifest.json
+# ensamblar paquete documental base RC (crea carpeta + logs/notes + templates + manifest)
+pnpm rc:assemble -- --rcId %RC_ID%
 ```
 
 2) **Comandos para VPS (pull)**
@@ -165,8 +158,33 @@ node scripts/run-release-smokes.js --pack AB --jsonOut .tmp/release-smokes-%RC_I
 # pack c manual (completar checklist en markdown)
 # scripts/smoke-executive-demo-dashboard.md
 # scripts/smoke-demo-narrative-support.md
+
+# re-ensamblar para copiar evidencias técnicas al paquete RC y actualizar manifest
+pnpm rc:assemble -- --rcId %RC_ID%
 ```
 
 Cierre documental:
 - Completar `rc-acta.md` con decisión `GO`, `GO con observaciones` o `NO-GO`.
 - Completar `evidence-manifest.json` con rutas reales de artefactos y responsables.
+
+### Ensamblador mínimo de evidencia RC
+
+Script: `scripts/assemble-release-evidence.js`
+
+- Entrada obligatoria: `--rcId <RC_ID>`.
+- Crea estructura base `docs/release-candidates/<RC_ID>/`, incluyendo `logs/` y `notes/`.
+- Copia templates base:
+  - `rc-acta-template.md` -> `rc-acta.md`
+  - `pack-c-manual-checklist-template.md` -> `pack-c-manual-checklist.md`
+  - `evidence-manifest-template.json` -> `evidence-manifest.json`
+- Copia evidencias técnicas si existen:
+  - `.tmp/preflight-release-<RC_ID>.json` -> `preflight-report.json`
+  - `.tmp/release-smokes-<RC_ID>.json` -> `runner-report.json`
+- Si faltan JSON en `.tmp`, registra `WARN`, deja trazabilidad de faltantes en manifest y continúa.
+- Solo falla con exit code `1` por errores reales de ensamblado (argumento faltante, template inexistente, permisos/escritura).
+
+Alias npm:
+
+```bash
+pnpm rc:assemble -- --rcId RC-20260405-1530-AB-billing-hardening
+```

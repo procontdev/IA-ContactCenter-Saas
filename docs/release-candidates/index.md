@@ -34,17 +34,16 @@ docs/release-candidates/
     notes/
 ```
 
-## 3) Flujo mínimo de uso (manual)
+## 3) Flujo mínimo de uso (manual + ensamblado mínimo)
 
-1. Crear carpeta de corrida: `docs/release-candidates/<RC_ID>/`.
-2. Copiar templates:
-   - `templates/rc-acta-template.md` -> `<RC_ID>/rc-acta.md`
-   - `templates/pack-c-manual-checklist-template.md` -> `<RC_ID>/pack-c-manual-checklist.md`
-   - `templates/evidence-manifest-template.json` -> `<RC_ID>/evidence-manifest.json`
-3. Ejecutar preflight + runner técnico (Pack A o AB) y guardar JSON/reportes.
-4. Ejecutar Pack C manual y completar checklist.
-5. Completar acta RC con decisión: `GO`, `GO con observaciones` o `NO-GO`.
-6. Completar `evidence-manifest.json` con rutas reales y responsables.
+1. Definir `RC_ID`.
+2. Ejecutar ensamblado mínimo:
+   - `pnpm rc:assemble -- --rcId <RC_ID>`
+   - Crea `docs/release-candidates/<RC_ID>/`, `logs/`, `notes/`, copia templates y actualiza manifest base.
+3. Ejecutar preflight + runner técnico (Pack A o AB) con `jsonOut` versionado por `RC_ID`.
+4. Ejecutar de nuevo `pnpm rc:assemble -- --rcId <RC_ID>` para copiar evidencias técnicas desde `.tmp` al paquete RC y refrescar manifest.
+5. Ejecutar Pack C manual y completar checklist.
+6. Completar acta RC con decisión: `GO`, `GO con observaciones` o `NO-GO`.
 
 ## 4) Criterio mínimo de decisión
 
@@ -59,7 +58,6 @@ docs/release-candidates/
 
 ## 5) Alcance fuera de esta versión
 
-- Ensamblado automático de paquete final.
 - Publicación automática de artefactos.
 - Generación automática de actas/manifiestos.
 

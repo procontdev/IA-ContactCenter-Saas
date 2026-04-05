@@ -30,6 +30,7 @@
         "smoke:release:candidate": "node scripts/run-release-smokes.js --pack AB",
         "smoke:release:pack-a": "node scripts/run-release-smokes.js --pack A",
         "smoke:release:pack-ab": "node scripts/run-release-smokes.js --pack AB",
-        "smoke:release:ci": "node scripts/run-release-smokes.js --pack AB --skipPreflight --jsonOut .tmp/release-smokes-ci.json"
+        "smoke:release:ci": "node scripts/run-release-smokes.js --pack AB --skipPreflight --jsonOut .tmp/release-smokes-ci.json",
+        "rc:assemble": "node scripts/assemble-release-evidence.js"
     }
 }
