@@ -1,0 +1,84 @@
+{
+  "generatedAt": "2026-04-05T12:10:45.847Z",
+  "summary": {
+    "pack": "AB",
+    "total": 7,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 2,
+    "durationMs": 59883
+  },
+  "failedCritical": [],
+  "results": [
+    {
+      "id": "release-readiness",
+      "label": "release readiness base",
+      "script": "scripts/smoke-release-readiness.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 193,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-plans",
+      "label": "packaging plans / gating",
+      "script": "scripts/smoke-packaging-plans.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 15212,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "billing-subscription",
+      "label": "billing subscription scaffolding",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 15631,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "lead-automation-triggers",
+      "label": "lead automation triggers",
+      "script": "scripts/smoke-lead-automation-triggers.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 10457,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-limits-guardrails",
+      "label": "packaging limits guardrails",
+      "script": "scripts/smoke-packaging-limits-guardrails.js",
+      "critical": false,
+      "status": "PASS",
+      "durationMs": 16981,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "campaign-onboarding",
+      "label": "campaign onboarding",
+      "script": "scripts/smoke-campaign-onboarding.js",
+      "critical": false,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    },
+    {
+      "id": "campaign-settings",
+      "label": "campaign settings",
+      "script": "scripts/smoke-campaign-settings.js",
+      "critical": false,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    }
+  ]
+}

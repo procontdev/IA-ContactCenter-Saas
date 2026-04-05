@@ -1,0 +1,84 @@
+{
+  "generatedAt": "2026-04-05T11:37:06.827Z",
+  "summary": {
+    "pack": "AB",
+    "total": 7,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 2,
+    "durationMs": 38767
+  },
+  "failedCritical": [],
+  "results": [
+    {
+      "id": "release-readiness",
+      "label": "release readiness base",
+      "script": "scripts/smoke-release-readiness.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 211,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-plans",
+      "label": "packaging plans / gating",
+      "script": "scripts/smoke-packaging-plans.js",
+      "critical": true,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: SMOKE_BASIC_TENANT_ID"
+    },
+    {
+      "id": "billing-subscription",
+      "label": "billing subscription scaffolding",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 14812,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "lead-automation-triggers",
+      "label": "lead automation triggers",
+      "script": "scripts/smoke-lead-automation-triggers.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 10190,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-limits-guardrails",
+      "label": "packaging limits guardrails",
+      "script": "scripts/smoke-packaging-limits-guardrails.js",
+      "critical": false,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: SMOKE_BASIC_TENANT_ID"
+    },
+    {
+      "id": "campaign-onboarding",
+      "label": "campaign onboarding",
+      "script": "scripts/smoke-campaign-onboarding.js",
+      "critical": false,
+      "status": "PASS",
+      "durationMs": 7236,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "campaign-settings",
+      "label": "campaign settings",
+      "script": "scripts/smoke-campaign-settings.js",
+      "critical": false,
+      "status": "PASS",
+      "durationMs": 6314,
+      "exitCode": 0,
+      "reason": ""
+    }
+  ]
+}

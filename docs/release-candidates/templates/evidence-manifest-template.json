@@ -1,0 +1,58 @@
+{
+    "rcId": "RC-YYYYMMDD-HHMM-PACK-ALCANCE",
+    "generatedAt": "YYYY-MM-DDTHH:mm:ssZ",
+    "context": {
+        "environment": "local|staging|vps",
+        "pack": "A|AB",
+        "commitSha": "<git-sha>",
+        "branchOrTag": "<branch-or-tag>"
+    },
+    "decision": {
+        "status": "GO|GO_CON_OBSERVACIONES|NO_GO",
+        "summary": "Resumen ejecutivo corto de cierre",
+        "approvedBy": {
+            "technical": "<nombre>",
+            "operations": "<nombre>"
+        }
+    },
+    "preflight": {
+        "status": "PASS|WARN|FAIL",
+        "reportPath": ".tmp/preflight-release-<RC_ID>.json",
+        "logPath": "docs/release-candidates/<RC_ID>/logs/preflight.log"
+    },
+    "technicalRunner": {
+        "status": "PASS|FAIL",
+        "reportPath": ".tmp/release-smokes-<RC_ID>.json",
+        "logPath": "docs/release-candidates/<RC_ID>/logs/runner.log"
+    },
+    "packCManual": {
+        "status": "PASS|FAIL",
+        "checklistPath": "docs/release-candidates/<RC_ID>/pack-c-manual-checklist.md",
+        "evidenceNotesPath": "docs/release-candidates/<RC_ID>/notes/pack-c-notes.md"
+    },
+    "acta": {
+        "path": "docs/release-candidates/<RC_ID>/rc-acta.md"
+    },
+    "artifacts": [
+        {
+            "type": "json",
+            "name": "preflight-report",
+            "path": ".tmp/preflight-release-<RC_ID>.json"
+        },
+        {
+            "type": "json",
+            "name": "runner-report",
+            "path": ".tmp/release-smokes-<RC_ID>.json"
+        },
+        {
+            "type": "markdown",
+            "name": "pack-c-checklist",
+            "path": "docs/release-candidates/<RC_ID>/pack-c-manual-checklist.md"
+        },
+        {
+            "type": "markdown",
+            "name": "rc-acta",
+            "path": "docs/release-candidates/<RC_ID>/rc-acta.md"
+        }
+    ]
+}

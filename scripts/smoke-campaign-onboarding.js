@@ -104,16 +104,16 @@ async function main() {
     loadEnv(path.resolve('.env.antigravity.local'));
     loadEnv(path.resolve('.env'));
 
-    const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
-    const anonKey = String(process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-    const serviceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '');
-    const appBaseUrl = String(process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
+    const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const anonKey = String(process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+    const serviceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    const appBaseUrl = String(process.env.APP_BASE_URL || 'http://localhost:3001').trim().replace(/\/$/, '');
 
-    const adminEmail = String(process.env.DEMO_ADMIN_EMAIL || 'demo.admin@local.test');
-    const adminPassword = String(process.env.DEMO_ADMIN_PASSWORD || 'DemoAdmin123!');
+    const adminEmail = String(process.env.DEMO_ADMIN_EMAIL || 'demo.admin@local.test').trim();
+    const adminPassword = String(process.env.DEMO_ADMIN_PASSWORD || 'DemoAdmin123!').trim();
 
-    const tempEmail = String(process.env.SMOKE_CAMPAIGN_ONBOARDING_AGENT_EMAIL || `demo.campaign.onboard.${Date.now()}@local.test`);
-    const tempPassword = String(process.env.SMOKE_CAMPAIGN_ONBOARDING_AGENT_PASSWORD || 'DemoAgent123!');
+    const tempEmail = String(process.env.SMOKE_CAMPAIGN_ONBOARDING_AGENT_EMAIL || `demo.campaign.onboard.${Date.now()}@local.test`).trim();
+    const tempPassword = String(process.env.SMOKE_CAMPAIGN_ONBOARDING_AGENT_PASSWORD || 'DemoAgent123!').trim();
 
     expect(Boolean(supabaseUrl && anonKey), 'Supabase URL/anon key disponibles', { supabaseUrl });
     expect(Boolean(serviceKey), 'SUPABASE_SERVICE_ROLE_KEY disponible para smoke completo');

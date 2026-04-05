@@ -1,0 +1,82 @@
+name: release-smokes
+
+on:
+  workflow_dispatch:
+    inputs:
+      pack:
+        description: Pack de smokes (A o AB)
+        required: true
+        default: AB
+        type: choice
+        options:
+          - A
+          - AB
+      run_seed:
+        description: Ejecutar seed + validate antes de release smokes
+        required: true
+        default: true
+        type: boolean
+      allow_critical_skip:
+        description: Permitir SKIP en smokes críticos (NO recomendado)
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  smoke-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DEMO_ADMIN_EMAIL: ${{ secrets.DEMO_ADMIN_EMAIL }}
+      DEMO_ADMIN_PASSWORD: ${{ secrets.DEMO_ADMIN_PASSWORD }}
+      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+      SMOKE_BASIC_TENANT_ID: ${{ secrets.SMOKE_BASIC_TENANT_ID }}
+      SMOKE_PRO_TENANT_ID: ${{ secrets.SMOKE_PRO_TENANT_ID }}
+      SMOKE_BASIC_TENANT_SLUG: ${{ vars.SMOKE_BASIC_TENANT_SLUG }}
+      SMOKE_PRO_TENANT_SLUG: ${{ vars.SMOKE_PRO_TENANT_SLUG }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Seed demo dataset (optional)
+        if: ${{ inputs.run_seed }}
+        run: pnpm seed:demo
+
+      - name: Validate demo seed (optional)
+        if: ${{ inputs.run_seed }}
+        run: pnpm validate:seed-demo
+
+      - name: Preflight release candidate
+        run: node scripts/preflight-release-candidate.js --pack ${{ inputs.pack }} --jsonOut .tmp/preflight-release-ci.json
+
+      - name: Run release smoke runner
+        run: node scripts/run-release-smokes.js --pack ${{ inputs.pack }} --skipPreflight --jsonOut .tmp/release-smokes-ci.json ${{ inputs.allow_critical_skip && '--allowCriticalSkip' || '' }}
+
+      - name: Upload smoke report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smokes-${{ github.run_id }}
+          path: |
+            .tmp/preflight-release-ci.json
+            .tmp/release-smokes-ci.json
+          if-no-files-found: warn

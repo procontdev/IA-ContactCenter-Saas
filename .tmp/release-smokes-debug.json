@@ -1,0 +1,95 @@
+{
+  "generatedAt": "2026-04-05T12:02:58.168Z",
+  "summary": {
+    "pack": "AB",
+    "total": 7,
+    "passed": 2,
+    "failed": 2,
+    "skipped": 3,
+    "durationMs": 40844
+  },
+  "failedCritical": [
+    {
+      "id": "packaging-plans",
+      "script": "scripts/smoke-packaging-plans.js",
+      "reason": "Exit code 1"
+    },
+    {
+      "id": "billing-subscription",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "reason": "Exit code 1"
+    }
+  ],
+  "results": [
+    {
+      "id": "release-readiness",
+      "label": "release readiness base",
+      "script": "scripts/smoke-release-readiness.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 193,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-plans",
+      "label": "packaging plans / gating",
+      "script": "scripts/smoke-packaging-plans.js",
+      "critical": true,
+      "status": "FAIL",
+      "durationMs": 15062,
+      "exitCode": 1,
+      "reason": "Exit code 1"
+    },
+    {
+      "id": "billing-subscription",
+      "label": "billing subscription scaffolding",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "critical": true,
+      "status": "FAIL",
+      "durationMs": 7715,
+      "exitCode": 1,
+      "reason": "Exit code 1"
+    },
+    {
+      "id": "lead-automation-triggers",
+      "label": "lead automation triggers",
+      "script": "scripts/smoke-lead-automation-triggers.js",
+      "critical": true,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    },
+    {
+      "id": "packaging-limits-guardrails",
+      "label": "packaging limits guardrails",
+      "script": "scripts/smoke-packaging-limits-guardrails.js",
+      "critical": false,
+      "status": "PASS",
+      "durationMs": 16434,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "campaign-onboarding",
+      "label": "campaign onboarding",
+      "script": "scripts/smoke-campaign-onboarding.js",
+      "critical": false,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    },
+    {
+      "id": "campaign-settings",
+      "label": "campaign settings",
+      "script": "scripts/smoke-campaign-settings.js",
+      "critical": false,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    }
+  ]
+}

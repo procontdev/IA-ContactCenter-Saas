@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2026-04-05T12:09:32.534Z",
+  "summary": {
+    "pack": "A",
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 43191
+  },
+  "failedCritical": [],
+  "results": [
+    {
+      "id": "release-readiness",
+      "label": "release readiness base",
+      "script": "scripts/smoke-release-readiness.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 257,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-plans",
+      "label": "packaging plans / gating",
+      "script": "scripts/smoke-packaging-plans.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 15527,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "billing-subscription",
+      "label": "billing subscription scaffolding",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 15629,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "lead-automation-triggers",
+      "label": "lead automation triggers",
+      "script": "scripts/smoke-lead-automation-triggers.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 10305,
+      "exitCode": 0,
+      "reason": ""
+    }
+  ]
+}

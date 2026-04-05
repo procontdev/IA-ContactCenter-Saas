@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2026-04-05T11:35:14.076Z",
+  "summary": {
+    "pack": "A",
+    "total": 4,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 1,
+    "durationMs": 24820
+  },
+  "failedCritical": [],
+  "results": [
+    {
+      "id": "release-readiness",
+      "label": "release readiness base",
+      "script": "scripts/smoke-release-readiness.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 217,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "packaging-plans",
+      "label": "packaging plans / gating",
+      "script": "scripts/smoke-packaging-plans.js",
+      "critical": true,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: SMOKE_BASIC_TENANT_ID"
+    },
+    {
+      "id": "billing-subscription",
+      "label": "billing subscription scaffolding",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 14639,
+      "exitCode": 0,
+      "reason": ""
+    },
+    {
+      "id": "lead-automation-triggers",
+      "label": "lead automation triggers",
+      "script": "scripts/smoke-lead-automation-triggers.js",
+      "critical": true,
+      "status": "PASS",
+      "durationMs": 9961,
+      "exitCode": 0,
+      "reason": ""
+    }
+  ]
+}

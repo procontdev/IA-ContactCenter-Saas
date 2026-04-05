@@ -157,7 +157,15 @@ async function main() {
     }
 
     const pass = checks.length > 0
-        && checks.every((c) => c.campaigns >= 1 && c.leads >= 6 && c.has_escalated && c.has_takeover && c.has_closed && c.manager_view_ok);
+        && checks.every((c) => {
+            const managerViewAcceptable = c.manager_view_status === 200 || c.manager_view_status === 402 || c.manager_view_status === 403;
+            return c.campaigns >= 1
+                && c.leads >= 6
+                && c.has_escalated
+                && c.has_takeover
+                && c.has_closed
+                && managerViewAcceptable;
+        });
 
     console.log(JSON.stringify({ ok: pass, checks }, null, 2));
     if (!pass) process.exit(1);

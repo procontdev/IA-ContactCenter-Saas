@@ -23,6 +23,13 @@
         "smoke:lead-intake": "node scripts/smoke-lead-intake-source-mapping.js",
         "smoke:manager-view": "node scripts/smoke-manager-view.js",
         "smoke:commercial-insights": "node scripts/smoke-commercial-insights.js",
-        "smoke:release-readiness": "node scripts/smoke-release-readiness.js"
+        "preflight:release:candidate": "node scripts/preflight-release-candidate.js --pack AB",
+        "preflight:release:pack-a": "node scripts/preflight-release-candidate.js --pack A",
+        "preflight:release:pack-ab": "node scripts/preflight-release-candidate.js --pack AB",
+        "smoke:release-readiness": "node scripts/smoke-release-readiness.js",
+        "smoke:release:candidate": "node scripts/run-release-smokes.js --pack AB",
+        "smoke:release:pack-a": "node scripts/run-release-smokes.js --pack A",
+        "smoke:release:pack-ab": "node scripts/run-release-smokes.js --pack AB",
+        "smoke:release:ci": "node scripts/run-release-smokes.js --pack AB --skipPreflight --jsonOut .tmp/release-smokes-ci.json"
     }
 }

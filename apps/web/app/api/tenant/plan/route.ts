@@ -27,6 +27,7 @@ export async function PATCH(req: Request) {
         }
 
         await callPlatformCoreRpc(req, 'update_active_tenant_plan', { p_plan_code: nextPlan });
+        await callPlatformCoreRpc(req, 'update_active_tenant_subscription', { p_plan_code: nextPlan });
         const item = await resolveTenantPlanFromRequest(req);
 
         return json(200, { item });

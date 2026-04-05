@@ -11,6 +11,8 @@ build/
 # env
 .env
 .env.local
+.env.antigravity.local
+.env.*.local
 .env.development.local
 .env.test.local
 .env.production.local

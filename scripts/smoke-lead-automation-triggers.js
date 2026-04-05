@@ -84,21 +84,44 @@ async function main() {
     loadEnv(path.resolve('.env.antigravity.local'));
     loadEnv(path.resolve('.env'));
 
-    const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
-    const anonKey = String(process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-    const appBaseUrlFromEnv = String(process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/$/, '');
-    const adminEmail = String(process.env.DEMO_ADMIN_EMAIL || 'demo.admin@local.test');
-    const adminPassword = String(process.env.DEMO_ADMIN_PASSWORD || 'DemoAdmin123!');
+    const supabaseUrl = String(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim().replace(/\/$/, '');
+    const anonKey = String(process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+    const appBaseUrlFromEnv = String(process.env.APP_BASE_URL || 'http://localhost:3001').trim().replace(/\/$/, '');
+    const adminEmail = String(process.env.DEMO_ADMIN_EMAIL || process.env.SMOKE_EMAIL || 'demo.admin@local.test').trim();
+    const adminPassword = String(process.env.DEMO_ADMIN_PASSWORD || process.env.SMOKE_PASSWORD || 'DemoAdmin123!').trim();
 
     expect(Boolean(supabaseUrl && anonKey), 'Supabase URL/anon key disponibles', { supabaseUrl });
     const adminToken = await login(supabaseUrl, anonKey, adminEmail, adminPassword);
     const appBaseUrl = await resolveAppBaseUrl(appBaseUrlFromEnv, adminToken);
 
+    const membershipsRes = await reqJson(`${appBaseUrl}/api/tenant/memberships`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const memberships = Array.isArray(membershipsRes.body?.items)
+        ? membershipsRes.body.items
+        : Array.isArray(membershipsRes.body)
+            ? membershipsRes.body
+            : [];
+    const activeMembership = memberships.find((m) => m?.is_active === true)
+        || memberships.find((m) => m?.is_primary === true)
+        || memberships[0]
+        || null;
+    const activeTenantId = String(activeMembership?.tenant_id || '').trim();
+    expect(membershipsRes.ok && Boolean(activeTenantId), 'tenant activo resuelto para smoke automation', membershipsRes.body);
+
     const campaignsRes = await reqJson(
-        `${supabaseUrl}/rest/v1/campaigns?select=id,code,tenant_id&order=created_at.desc&limit=1`,
+        `${supabaseUrl}/rest/v1/campaigns?select=id,code,tenant_id&tenant_id=eq.${encodeURIComponent(activeTenantId)}&order=created_at.desc&limit=1`,
         { method: 'GET', headers: { apikey: anonKey, Authorization: `Bearer ${adminToken}`, 'Accept-Profile': 'contact_center' } }
     );
-    expect(campaignsRes.ok && Array.isArray(campaignsRes.body) && campaignsRes.body.length > 0, 'existe campaña para tenant activo', campaignsRes.body);
+    expect(
+        campaignsRes.ok
+        && Array.isArray(campaignsRes.body)
+        && campaignsRes.body.length > 0
+        && String(campaignsRes.body[0]?.tenant_id || '') === activeTenantId,
+        'existe campaña para tenant activo',
+        campaignsRes.body
+    );
     const campaign = campaignsRes.body[0];
 
     const seed = Date.now();
