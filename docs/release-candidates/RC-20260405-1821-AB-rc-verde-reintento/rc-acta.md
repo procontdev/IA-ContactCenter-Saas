@@ -4,7 +4,7 @@
 
 - **RC_ID:** `RC-20260405-1821-AB-rc-verde-reintento`
 - **Fecha/hora de cierre (UTC):** `2026-04-05T18:24:00Z`
-- **Fecha/hora de reevaluación documental (UTC):** `2026-04-05T18:30:00Z`
+- **Fecha/hora de reevaluación documental (UTC):** `2026-04-05T19:39:00Z`
 - **Entorno evaluado:** `local`
 - **Pack evaluado:** `AB` + `Pack C manual`
 - **Commit evaluado (SHA):** `25ae6d0`
@@ -27,6 +27,7 @@ El runner técnico AB quedó en `PASS` con 7/7 smokes aprobados (0 fallas críti
 El paquete documental RC quedó ensamblado con reportes técnicos versionados y manifest actualizado.
 Pack C quedó reevaluado documentalmente con cierre parcial (C4), pero su ejecución manual completa (C1/C2/C3) queda pendiente.
 Se recomienda cierre en `GO con observaciones` condicionado a completar evidencia manual de Pack C.
+La reevaluación añadió protocolo manual concreto para C1/C2/C3, orientado a ejecución por perfil no técnico con trazabilidad mínima obligatoria.
 
 ## 2) Evidencias mínimas obligatorias
 
@@ -45,6 +46,7 @@ Se recomienda cierre en `GO con observaciones` condicionado a completar evidenci
 ### 3.2 Observaciones no bloqueantes
 - Pack C manual no ejecutado completamente en esta corrida (requiere validación manual de narrativa/capturas para C1/C2/C3).
 - C4 quedó documentado con evidencia existente, útil para trazabilidad pero insuficiente para elevar a `GO` pleno.
+- Existe protocolo documental de ejecución manual para C1/C2/C3 en `pack-c-manual-checklist.md` y plantilla de registro en `notes/pack-c-notes.md`.
 
 ### 3.3 Riesgos conocidos y mitigación
 - Riesgo: declarar `GO` pleno sin evidencia manual final de Pack C.
@@ -65,6 +67,13 @@ Condiciones para siguiente paso (si aplica):
 1. Ejecutar manualmente C1/C2/C3 del Pack C.
 2. Completar `pack-c-manual-checklist.md` con estados finales y evidencia.
 3. Confirmar aprobaciones técnica/operación para elevar de `GO con observaciones` a `GO` pleno.
+
+### Criterio operativo explícito para elevar a GO
+
+- C1: `PASS` manual con evidencia de recorrido ejecutiva + guardrail de rol.
+- C2: `PASS` manual con evidencia de los 3 recorridos de `/demo` y CTAs funcionales.
+- C3: `PASS` manual con verificación de no regresión visible en rutas críticas.
+- Aprobaciones técnica y operación registradas (nombre/fecha).
 
 ## 5.1 Estado como referencia de release
 
