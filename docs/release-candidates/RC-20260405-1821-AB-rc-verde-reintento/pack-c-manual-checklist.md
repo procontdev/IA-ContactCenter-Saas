@@ -23,6 +23,13 @@
 
 > Este bloque define **cómo** ejecutar cada pendiente sin ambigüedad. No reemplaza ejecución humana real.
 
+### Criterio de PASS/FAIL por ítem (obligatorio)
+
+- **C1 = PASS** si el flujo en `/leads/executive` carga correctamente, refresca KPIs al cambiar filtro y el guardrail de rol `agent` restringe acceso como esperado.
+- **C2 = PASS** si los 3 recorridos de `/demo` (`Comercial`, `Operativo`, `Ejecutivo`) muestran CTAs y rutas funcionales sin error visible.
+- **C3 = PASS** si las rutas críticas (`/leads/executive`, `/leads/commercial`, `/leads/manager`, `/leads/desk`, `/leads/workspace`) cargan sin regresión visible post AB.
+- Cualquier incumplimiento de criterio anterior se registra como **FAIL**.
+
 ### Evidencia mínima obligatoria por ítem
 
 - Captura 1 (inicio): pantalla de entrada a la ruta principal del flujo.
@@ -63,6 +70,16 @@
 
 - Si C1/C2/C3 no tienen evidencia humana mínima: mantener `N/A (pendiente manual)` y `GO con observaciones`.
 - Solo marcar `PASS` en C1/C2/C3 cuando exista evidencia trazable y registro explícito.
+
+## Registro manual obligatorio (completar durante ejecución real)
+
+> Completar una fila por ítem manual C1/C2/C3 inmediatamente después de ejecutarlo.
+
+| Ítem | Ejecutado por (nombre/rol) | Fecha/hora (UTC) | Resultado (`PASS`/`FAIL`) | Evidencia (capturas/links) | Observaciones |
+|---|---|---|---|---|---|
+| C1 | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL |
+| C2 | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL |
+| C3 | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL | PENDIENTE_MANUAL |
 
 ## Hallazgos manuales
 
