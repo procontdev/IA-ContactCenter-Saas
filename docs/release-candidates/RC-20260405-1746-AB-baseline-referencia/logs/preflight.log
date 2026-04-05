@@ -1,0 +1,21 @@
+[INFO] Comando ejecutado:
+node scripts/preflight-release-candidate.js --pack AB --jsonOut .tmp/preflight-release-RC-20260405-1746-AB-baseline-referencia.json
+
+[INFO] Resultado consolidado: FAIL
+[INFO] generatedAt: 2026-04-05T17:46:48.086Z
+
+[RESUMEN]
+- reachability.app: FAIL (APP_BASE_URL no está configurada)
+- reachability.supabase: PASS
+- tenants.resolve: FAIL
+- env.required: FAIL
+- env.recommended: WARN
+- dataset.demo: PASS
+- gating.basic: WARN
+- drift.pack: FAIL
+
+[ACTIONABLE]
+- Configurar APP_BASE_URL
+- Configurar SMOKE_EMAIL / SMOKE_PASSWORD
+- Configurar SMOKE_BASIC_TENANT_ID / SMOKE_PRO_TENANT_ID
+- Configurar DEMO_ADMIN_EMAIL / DEMO_ADMIN_PASSWORD

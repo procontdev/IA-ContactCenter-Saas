@@ -1,0 +1,109 @@
+{
+  "generatedAt": "2026-04-05T17:46:48.086Z",
+  "status": "FAIL",
+  "pack": "AB",
+  "durationMs": 11000,
+  "summary": {
+    "totalChecks": 8,
+    "passed": 2,
+    "warnings": 2,
+    "failed": 4
+  },
+  "env": {
+    "required": [
+      "APP_BASE_URL",
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "SMOKE_EMAIL",
+      "SMOKE_PASSWORD",
+      "SMOKE_BASIC_TENANT_ID",
+      "SMOKE_PRO_TENANT_ID",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "DEMO_ADMIN_EMAIL",
+      "DEMO_ADMIN_PASSWORD"
+    ],
+    "recommended": [
+      "SMOKE_BASIC_TENANT_SLUG",
+      "SMOKE_PRO_TENANT_SLUG",
+      "SMOKE_API_BASE_URL"
+    ],
+    "optional": [
+      "ALLOW_CRITICAL_SKIP"
+    ],
+    "missingRequired": [
+      "APP_BASE_URL",
+      "SMOKE_EMAIL",
+      "SMOKE_PASSWORD",
+      "SMOKE_BASIC_TENANT_ID",
+      "SMOKE_PRO_TENANT_ID",
+      "DEMO_ADMIN_EMAIL",
+      "DEMO_ADMIN_PASSWORD"
+    ],
+    "missingRecommended": [
+      "SMOKE_API_BASE_URL"
+    ],
+    "missingOptional": [
+      "ALLOW_CRITICAL_SKIP"
+    ]
+  },
+  "checks": [
+    {
+      "id": "reachability.app",
+      "status": "FAIL",
+      "detail": "APP_BASE_URL no está configurada."
+    },
+    {
+      "id": "reachability.supabase",
+      "status": "PASS",
+      "detail": "Supabase reachable (200, 631ms)."
+    },
+    {
+      "id": "tenants.resolve",
+      "status": "FAIL",
+      "detail": "No se puede resolver tenants por slug; faltan variables: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD"
+    },
+    {
+      "id": "env.required",
+      "status": "FAIL",
+      "detail": "Faltan variables obligatorias: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    },
+    {
+      "id": "env.recommended",
+      "status": "WARN",
+      "detail": "Variables recomendadas faltantes: SMOKE_API_BASE_URL"
+    },
+    {
+      "id": "dataset.demo",
+      "status": "PASS",
+      "detail": "Dataset demo válido (10363ms)."
+    },
+    {
+      "id": "gating.basic",
+      "status": "WARN",
+      "detail": "Gating básico omitido por falta de credenciales mínimas."
+    },
+    {
+      "id": "drift.pack",
+      "status": "FAIL",
+      "detail": "Drift de prerequisitos detectado -> release-readiness: APP_BASE_URL | packaging-plans: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID | billing-subscription: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_PRO_TENANT_ID | lead-automation-triggers: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD | packaging-limits-guardrails: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID | campaign-onboarding: APP_BASE_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD | campaign-settings: APP_BASE_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    }
+  ],
+  "warnings": [
+    "Variables recomendadas faltantes: SMOKE_API_BASE_URL",
+    "Gating básico omitido por falta de credenciales mínimas."
+  ],
+  "failures": [
+    "APP_BASE_URL no está configurada.",
+    "No se puede resolver tenants por slug; faltan variables: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD",
+    "Faltan variables obligatorias: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD",
+    "Drift de prerequisitos detectado -> release-readiness: APP_BASE_URL | packaging-plans: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID | billing-subscription: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_PRO_TENANT_ID | lead-automation-triggers: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD | packaging-limits-guardrails: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID | campaign-onboarding: APP_BASE_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD | campaign-settings: APP_BASE_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+  ],
+  "actionable": [
+    "Configurar variables obligatorias: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD",
+    "Configurar variables recomendadas: SMOKE_API_BASE_URL",
+    "APP_BASE_URL no está configurada.",
+    "No se puede resolver tenants por slug; faltan variables: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD",
+    "Faltan variables obligatorias: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD",
+    "Drift de prerequisitos detectado -> release-readiness: APP_BASE_URL | packaging-plans: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID | billing-subscription: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_PRO_TENANT_ID | lead-automation-triggers: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD | packaging-limits-guardrails: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID | campaign-onboarding: APP_BASE_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD | campaign-settings: APP_BASE_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+  ]
+}

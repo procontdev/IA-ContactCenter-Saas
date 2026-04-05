@@ -63,3 +63,7 @@ docs/release-candidates/
 - Publicación automática de artefactos.
 - Generación automática de actas/manifiestos.
 
+## 6) Corridas documentadas
+
+- [`RC-20260405-1746-AB-baseline-referencia`](docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/rc-acta.md): primera corrida RC documentada real (base de referencia), con resultado `NO_GO` por prerequisitos faltantes.
+

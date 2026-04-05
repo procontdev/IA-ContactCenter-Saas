@@ -1,0 +1,17 @@
+[INFO] Comando ejecutado:
+node scripts/run-release-smokes.js --pack AB --skipPreflight true --jsonOut .tmp/release-smokes-RC-20260405-1746-AB-baseline-referencia.json
+
+[INFO] Resultado consolidado: FAIL
+[INFO] generatedAt: 2026-04-05T17:47:04.039Z
+
+[RESUMEN]
+- total: 7
+- passed: 0
+- failed: 4
+- skipped: 3
+
+[CRITICAL FAILURES]
+- release-readiness: Critical precheck failed: APP_BASE_URL
+- packaging-plans: Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID
+- billing-subscription: Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_PRO_TENANT_ID
+- lead-automation-triggers: Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD

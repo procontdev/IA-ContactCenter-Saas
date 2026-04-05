@@ -1,0 +1,105 @@
+{
+  "generatedAt": "2026-04-05T17:47:04.039Z",
+  "summary": {
+    "pack": "AB",
+    "total": 7,
+    "passed": 0,
+    "failed": 4,
+    "skipped": 3,
+    "durationMs": 3
+  },
+  "failedCritical": [
+    {
+      "id": "release-readiness",
+      "script": "scripts/smoke-release-readiness.js",
+      "reason": "Critical precheck failed: APP_BASE_URL"
+    },
+    {
+      "id": "packaging-plans",
+      "script": "scripts/smoke-packaging-plans.js",
+      "reason": "Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID"
+    },
+    {
+      "id": "billing-subscription",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "reason": "Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_PRO_TENANT_ID"
+    },
+    {
+      "id": "lead-automation-triggers",
+      "script": "scripts/smoke-lead-automation-triggers.js",
+      "reason": "Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD"
+    }
+  ],
+  "results": [
+    {
+      "id": "release-readiness",
+      "label": "release readiness base",
+      "script": "scripts/smoke-release-readiness.js",
+      "critical": true,
+      "status": "FAIL",
+      "durationMs": 0,
+      "exitCode": 2,
+      "reason": "Critical precheck failed: APP_BASE_URL"
+    },
+    {
+      "id": "packaging-plans",
+      "label": "packaging plans / gating",
+      "script": "scripts/smoke-packaging-plans.js",
+      "critical": true,
+      "status": "FAIL",
+      "durationMs": 0,
+      "exitCode": 2,
+      "reason": "Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID"
+    },
+    {
+      "id": "billing-subscription",
+      "label": "billing subscription scaffolding",
+      "script": "scripts/smoke-billing-subscription-scaffolding.js",
+      "critical": true,
+      "status": "FAIL",
+      "durationMs": 0,
+      "exitCode": 2,
+      "reason": "Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_PRO_TENANT_ID"
+    },
+    {
+      "id": "lead-automation-triggers",
+      "label": "lead automation triggers",
+      "script": "scripts/smoke-lead-automation-triggers.js",
+      "critical": true,
+      "status": "FAIL",
+      "durationMs": 0,
+      "exitCode": 2,
+      "reason": "Critical precheck failed: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD"
+    },
+    {
+      "id": "packaging-limits-guardrails",
+      "label": "packaging limits guardrails",
+      "script": "scripts/smoke-packaging-limits-guardrails.js",
+      "critical": false,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: APP_BASE_URL, SMOKE_EMAIL, SMOKE_PASSWORD, SMOKE_BASIC_TENANT_ID, SMOKE_PRO_TENANT_ID"
+    },
+    {
+      "id": "campaign-onboarding",
+      "label": "campaign onboarding",
+      "script": "scripts/smoke-campaign-onboarding.js",
+      "critical": false,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: APP_BASE_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    },
+    {
+      "id": "campaign-settings",
+      "label": "campaign settings",
+      "script": "scripts/smoke-campaign-settings.js",
+      "critical": false,
+      "status": "SKIP",
+      "durationMs": 0,
+      "exitCode": null,
+      "reason": "Missing env: APP_BASE_URL, DEMO_ADMIN_EMAIL, DEMO_ADMIN_PASSWORD"
+    }
+  ]
+}

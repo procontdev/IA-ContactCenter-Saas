@@ -1,0 +1,63 @@
+{
+    "rcId": "RC-20260405-1746-AB-baseline-referencia",
+    "generatedAt": "2026-04-05T17:47:04Z",
+    "context": {
+        "environment": "local",
+        "pack": "AB",
+        "commitSha": "8badbc3",
+        "branchOrTag": "main"
+    },
+    "decision": {
+        "status": "NO_GO",
+        "summary": "Corrida RC base documentada con FAIL en preflight y runner por prerequisitos faltantes; Pack C pendiente manual.",
+        "approvedBy": {
+            "technical": "PENDIENTE_MANUAL",
+            "operations": "PENDIENTE_MANUAL"
+        }
+    },
+    "preflight": {
+        "status": "FAIL",
+        "reportPath": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/preflight-report.json",
+        "logPath": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/logs/preflight.log"
+    },
+    "technicalRunner": {
+        "status": "FAIL",
+        "reportPath": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/runner-report.json",
+        "logPath": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/logs/runner.log"
+    },
+    "packCManual": {
+        "status": "FAIL",
+        "checklistPath": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/pack-c-manual-checklist.md",
+        "evidenceNotesPath": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/notes/pack-c-notes.md"
+    },
+    "acta": {
+        "path": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/rc-acta.md"
+    },
+    "artifacts": [
+        {
+            "type": "json",
+            "name": "preflight-report",
+            "path": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/preflight-report.json"
+        },
+        {
+            "type": "json",
+            "name": "runner-report",
+            "path": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/runner-report.json"
+        },
+        {
+            "type": "markdown",
+            "name": "pack-c-checklist",
+            "path": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/pack-c-manual-checklist.md"
+        },
+        {
+            "type": "markdown",
+            "name": "pack-c-notes",
+            "path": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/notes/pack-c-notes.md"
+        },
+        {
+            "type": "markdown",
+            "name": "rc-acta",
+            "path": "docs/release-candidates/RC-20260405-1746-AB-baseline-referencia/rc-acta.md"
+        }
+    ]
+}
